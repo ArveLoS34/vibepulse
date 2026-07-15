@@ -1,24 +1,33 @@
 {
   "expo": {
-    "name": "frontend",
+    "name": "VibePulse",
     "slug": "frontend",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
-    "userInterfaceStyle": "automatic",
+    "scheme": "vibepulse",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.pulseconnect.p5iexe"
+      "bundleIdentifier": "com.emergent.pulseconnect.p5iexe",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Upload profile photos to show your vibe",
+        "NSCameraUsageDescription": "Take a new photo for your profile",
+        "NSLocationWhenInUseUsageDescription": "Show nearby vibes and matches"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#0A0A0B"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.pulseconnect.p5iexe"
+      "package": "com.emergent.pulseconnect.p5iexe",
+      "permissions": [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -33,7 +42,13 @@
           "image": "./assets/images/splash-image.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#000000"
+          "backgroundColor": "#0A0A0B"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Upload profile photos to show your vibe"
         }
       ]
     ],
