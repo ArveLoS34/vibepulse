@@ -11,10 +11,13 @@ Features:
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import math
 import os
+import time
 import uuid
+from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Literal, Optional
@@ -38,6 +41,15 @@ EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 
 JWT_ALGO = "HS256"
 JWT_EXPIRY_DAYS = 30
+
+# --- Content limits (SEC-002) ---
+MAX_PHOTOS_PER_USER = 6
+MAX_IMAGE_BYTES = 500 * 1024  # 500 KB per base64-decoded image
+
+# --- Moderation rate limit (SEC-003) ---
+MODERATION_WINDOW_SEC = 60
+MODERATION_MAX_PER_WINDOW = 20  # per user per minute
+_mod_calls: dict[str, deque] = defaultdict(deque)
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
@@ -107,11 +119,15 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * R * math.asin(math.sqrt(a))
 
 
-def public_user(user: dict, viewer: Optional[dict] = None) -> dict:
-    """Strip sensitive fields; compute distance if viewer has location."""
+def public_user(user: dict, viewer: Optional[dict] = None, include_email: bool = False) -> dict:
+    """Strip sensitive fields; compute distance if viewer has location.
+
+    SEC-001: email is a private field and is only returned when the viewer IS
+    the user (i.e. via /auth/me or /users/me). All other endpoints omit it.
+    """
+    is_self = bool(viewer and viewer.get("user_id") == user.get("user_id"))
     out = {
         "user_id": user["user_id"],
-        "email": user.get("email"),
         "name": user.get("name", ""),
         "handle": user.get("handle", ""),
         "bio": user.get("bio", ""),
@@ -126,6 +142,8 @@ def public_user(user: dict, viewer: Optional[dict] = None) -> dict:
         "onboarded": user.get("onboarded", False),
         "created_at": user.get("created_at"),
     }
+    if include_email or is_self:
+        out["email"] = user.get("email")
     if viewer and viewer.get("location") and user.get("location"):
         try:
             v = viewer["location"]
@@ -137,12 +155,31 @@ def public_user(user: dict, viewer: Optional[dict] = None) -> dict:
 
 
 # ------------------------ moderation ------------------------
-async def moderate_text(text: str) -> tuple[bool, str]:
-    """Return (is_safe, reason). Fail-open on error."""
+def _mod_rate_check(user_id: str) -> bool:
+    """SEC-003: return True if this user is within the moderation call budget."""
+    q = _mod_calls[user_id]
+    now = time.time()
+    cutoff = now - MODERATION_WINDOW_SEC
+    while q and q[0] < cutoff:
+        q.popleft()
+    if len(q) >= MODERATION_MAX_PER_WINDOW:
+        return False
+    q.append(now)
+    return True
+
+
+async def moderate_text(text: str, user_id: str) -> tuple[bool, str]:
+    """Return (is_safe, reason).
+
+    SEC-003: rate-limited per user; on any LLM error we now fail CLOSED so
+    unsafe content cannot slip through when the moderator is down or throttled.
+    """
     if not text.strip():
         return True, ""
     if not EMERGENT_LLM_KEY:
         return True, ""
+    if not _mod_rate_check(user_id):
+        return False, "Rate limit: çok hızlı içerik gönderiyorsun. Biraz bekle."
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage  # type: ignore
 
@@ -157,15 +194,49 @@ async def moderate_text(text: str) -> tuple[bool, str]:
                 "Then a short reason (max 12 words). Format: 'SAFE' or 'UNSAFE: <reason>'."
             ),
         ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-        resp = await chat.send_message(UserMessage(text=text[:1000]))
+        resp = await asyncio.wait_for(chat.send_message(UserMessage(text=text[:1000])), timeout=10)
         result = str(resp).strip()
         if result.upper().startswith("UNSAFE"):
             reason = result.split(":", 1)[1].strip() if ":" in result else "Content violates guidelines"
             return False, reason
         return True, ""
     except Exception as e:
-        log.warning("moderation failed, allowing: %s", e)
-        return True, ""
+        log.warning("moderation failed, rejecting content: %s", e)
+        return False, "İçerik şu an doğrulanamıyor. Lütfen tekrar dene."
+
+
+# ------------------------ media validation (SEC-002) ------------------------
+def _b64_bytes(data_uri: str) -> int:
+    """Return decoded byte size of a data URI or raw base64; 0 if unparseable."""
+    if not data_uri:
+        return 0
+    payload = data_uri.split(",", 1)[1] if data_uri.startswith("data:") else data_uri
+    try:
+        return len(base64.b64decode(payload, validate=False))
+    except Exception:
+        return len(payload) * 3 // 4  # rough upper bound
+
+
+def _validate_image(data_uri: Optional[str]) -> None:
+    if not data_uri:
+        return
+    size = _b64_bytes(data_uri)
+    if size > MAX_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Görsel çok büyük (max {MAX_IMAGE_BYTES // 1024}KB, gelen {size // 1024}KB).",
+        )
+
+
+def _validate_photos(photos: Optional[List[str]]) -> None:
+    if photos is None:
+        return
+    if len(photos) > MAX_PHOTOS_PER_USER:
+        raise HTTPException(status_code=400, detail=f"En fazla {MAX_PHOTOS_PER_USER} fotoğraf yükleyebilirsin.")
+    for p in photos:
+        # allow remote http(s) urls (from Google avatar); only size-check base64
+        if p and (p.startswith("data:") or not p.startswith("http")):
+            _validate_image(p)
 
 
 # ------------------------- models -------------------------
@@ -249,7 +320,7 @@ async def register(payload: RegisterIn):
     }
     await db.users.insert_one(doc)
     token = create_token(user_id)
-    return {"token": token, "user": public_user(doc)}
+    return {"token": token, "user": public_user(doc, viewer=doc, include_email=True)}
 
 
 @api.post("/auth/login")
@@ -258,7 +329,7 @@ async def login(payload: LoginIn):
     if not user or not user.get("password") or not verify_password(payload.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_token(user["user_id"])
-    return {"token": token, "user": public_user(user)}
+    return {"token": token, "user": public_user(user, viewer=user, include_email=True)}
 
 
 @api.post("/auth/google")
@@ -303,19 +374,22 @@ async def google_session(payload: GoogleSessionIn):
         }
         await db.users.insert_one(user)
     token = create_token(user["user_id"])
-    return {"token": token, "user": public_user(user)}
+    return {"token": token, "user": public_user(user, viewer=user, include_email=True)}
 
 
 @api.get("/auth/me")
 async def me(current=Depends(get_current_user)):
-    return {"user": public_user(current, viewer=current)}
+    return {"user": public_user(current, viewer=current, include_email=True)}
 
 
 @api.put("/users/me")
 async def update_me(payload: ProfileUpdate, current=Depends(get_current_user)):
     updates = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
+    # SEC-002: enforce media limits
+    if "photos" in updates:
+        _validate_photos(updates["photos"])
     if "bio" in updates and updates["bio"]:
-        safe, reason = await moderate_text(updates["bio"])
+        safe, reason = await moderate_text(updates["bio"], current["user_id"])
         if not safe:
             raise HTTPException(status_code=400, detail=f"Bio rejected: {reason}")
     if "handle" in updates:
@@ -323,7 +397,7 @@ async def update_me(payload: ProfileUpdate, current=Depends(get_current_user)):
     updates["updated_at"] = now_utc().isoformat()
     await db.users.update_one({"user_id": current["user_id"]}, {"$set": updates})
     user = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0})
-    return {"user": public_user(user, viewer=user)}
+    return {"user": public_user(user, viewer=user, include_email=True)}
 
 
 @api.get("/users/{user_id}")
@@ -343,7 +417,8 @@ async def get_user(user_id: str, current=Depends(get_current_user)):
 # --- Posts / Feed ---
 @api.post("/posts")
 async def create_post(payload: PostCreate, current=Depends(get_current_user)):
-    safe, reason = await moderate_text(payload.text)
+    _validate_image(payload.image)  # SEC-002
+    safe, reason = await moderate_text(payload.text, current["user_id"])
     if not safe:
         raise HTTPException(status_code=400, detail=f"Post rejected: {reason}")
     post_id = new_id("post")
@@ -450,7 +525,7 @@ async def add_comment(post_id: str, payload: CommentCreate, current=Depends(get_
     post = await db.posts.find_one({"post_id": post_id}, {"_id": 0, "post_id": 1})
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
-    safe, reason = await moderate_text(payload.text)
+    safe, reason = await moderate_text(payload.text, current["user_id"])
     if not safe:
         raise HTTPException(status_code=400, detail=f"Comment rejected: {reason}")
     doc = {
@@ -604,7 +679,7 @@ async def list_messages(match_id: str, current=Depends(get_current_user), after:
 async def send_message(match_id: str, payload: MessageCreate, current=Depends(get_current_user)):
     m = await _match_or_404(match_id, current["user_id"])
     other = next(uid for uid in m["user_ids"] if uid != current["user_id"])
-    safe, reason = await moderate_text(payload.text)
+    safe, reason = await moderate_text(payload.text, current["user_id"])
     if not safe:
         raise HTTPException(status_code=400, detail=f"Message rejected: {reason}")
     doc = {
@@ -650,4 +725,6 @@ async def _startup():
 
 @app.on_event("shutdown")
 async def _shutdown():
+    client.close()
+
     client.close()
