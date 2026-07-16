@@ -15,6 +15,7 @@ export type VibeUser = {
   music_tags?: string[];
   photos?: string[];
   city?: string;
+  location?: { lat: number; lng: number };
   onboarded?: boolean;
   distance_km?: number;
   is_premium?: boolean;

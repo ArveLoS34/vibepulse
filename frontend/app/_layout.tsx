@@ -8,7 +8,15 @@ import { StatusBar } from "expo-status-bar";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { AuthProvider } from "@/src/context/AuthContext";
+import { useLocation } from "@/src/hooks/useLocation";
+import { useNotifications } from "@/src/hooks/useNotifications";
 import { theme } from "@/src/lib/theme";
+
+function ServicesInitializer() {
+  useLocation();
+  useNotifications();
+  return null;
+}
 
 
 // Disable logbox errors etc so that users can see the app
@@ -38,6 +46,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.bg }}>
       <SafeAreaProvider>
         <AuthProvider>
+          <ServicesInitializer />
           <View style={{ flex: 1, backgroundColor: theme.bg }}>
             <StatusBar style="light" />
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.bg } }} />

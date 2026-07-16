@@ -149,6 +149,29 @@ async def is_token_revoked(token: str) -> bool:
     return doc is not None
 
 
+async def send_push_notification(user_id: str, title: str, body: str, data: Optional[dict] = None) -> None:
+    """Send an Expo push notification to target user if registered."""
+    try:
+        user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "push_token": 1})
+        if not user or not user.get("push_token"):
+            return
+        token = user["push_token"]
+        if not token.startswith("ExponentPushToken"):
+            return
+
+        payload = {
+            "to": token,
+            "sound": "default",
+            "title": title,
+            "body": body,
+            "data": data or {},
+        }
+        async with httpx.AsyncClient(timeout=5) as hx:
+            await hx.post("https://exp.host/--/api/v2/push/send", json=payload)
+    except Exception as e:
+        log.warning("Push notification error for user %s: %s", user_id, e)
+
+
 async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -355,7 +378,12 @@ class SwipeIn(BaseModel):
 
 
 class MessageCreate(BaseModel):
-    text: str = Field(min_length=1, max_length=500)
+    text: Optional[str] = Field(default="", max_length=500)
+    image: Optional[str] = None
+
+
+class PushTokenIn(BaseModel):
+    push_token: str
 
 
 class GoogleSessionIn(BaseModel):
@@ -538,6 +566,15 @@ async def update_me(payload: ProfileUpdate, current=Depends(get_current_user)):
     await db.users.update_one({"user_id": current["user_id"]}, {"$set": updates})
     user = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0})
     return {"user": public_user(user, viewer=user, include_email=True)}
+
+
+@api.post("/users/push-token")
+async def save_push_token(payload: PushTokenIn, current=Depends(get_current_user)):
+    await db.users.update_one(
+        {"user_id": current["user_id"]},
+        {"$set": {"push_token": payload.push_token, "push_token_updated_at": now_utc().isoformat()}}
+    )
+    return {"message": "Push token başarıyla kaydedildi"}
 
 
 @api.get("/users/{user_id}")
@@ -787,6 +824,26 @@ async def create_swipe(payload: SwipeIn, current=Depends(get_current_user)):
                 match_doc.pop("_id", None)
             else:
                 match_doc = existing
+
+            # Send Match Push Notifications
+            asyncio.create_task(send_push_notification(
+                payload.target_user_id,
+                "Yeni Bir Eşleşme! ✨",
+                f"{current.get('name', 'Biri')} ile eşleştin! Hemen mesaj at."
+            ))
+            asyncio.create_task(send_push_notification(
+                current["user_id"],
+                "Yeni Bir Eşleşme! ✨",
+                f"{target.get('name', 'Biri')} ile eşleştin! Hemen mesaj at."
+            ))
+        else:
+            # Send Like Push Notification
+            asyncio.create_task(send_push_notification(
+                payload.target_user_id,
+                "Seni Biri Beğendi! 💖",
+                f"{current.get('name', 'Biri')} senin vibe'ını beğendi."
+            ))
+
     return {"matched": matched, "match": match_doc, "other_user": public_user(target, viewer=current) if matched else None}
 
 
@@ -838,21 +895,34 @@ async def list_messages(match_id: str, current=Depends(get_current_user), after:
 async def send_message(match_id: str, payload: MessageCreate, current=Depends(get_current_user)):
     m = await _match_or_404(match_id, current["user_id"])
     other = next(uid for uid in m["user_ids"] if uid != current["user_id"])
-    safe, reason = await moderate_text(payload.text, current["user_id"])
-    if not safe:
-        raise HTTPException(status_code=400, detail=f"Message rejected: {reason}")
+
+    if payload.image:
+        _validate_image(payload.image)
+
+    if payload.text and payload.text.strip():
+        safe, reason = await moderate_text(payload.text, current["user_id"])
+        if not safe:
+            raise HTTPException(status_code=400, detail=f"Message rejected: {reason}")
+    elif not payload.image:
+        raise HTTPException(status_code=400, detail="Mesaj içeriği veya fotoğraf olmalıdır.")
+
     doc = {
         "message_id": new_id("msg"),
         "match_id": match_id,
         "from_user_id": current["user_id"],
         "to_user_id": other,
-        "text": payload.text,
+        "text": payload.text or "",
+        "image": payload.image or "",
         "read": False,
         "created_at": now_utc().isoformat(),
     }
     await db.messages.insert_one(doc)
     await db.matches.update_one({"match_id": match_id}, {"$set": {"last_message_at": doc["created_at"]}})
     doc.pop("_id", None)
+
+    preview = "Sana bir fotoğraf gönderdi 📷" if (payload.image and not payload.text) else payload.text
+    asyncio.create_task(send_push_notification(other, "Yeni Mesaj 💬", f"{current.get('name', 'Biri')}: {preview}"))
+
     return {"message": doc}
 
 

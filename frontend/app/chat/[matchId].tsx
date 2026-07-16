@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import { api, TOKEN_KEY } from "@/src/lib/api";
 import { storage } from "@/src/utils/storage";
 import { useAuth } from "@/src/context/AuthContext";
@@ -27,6 +29,7 @@ type Msg = {
   from_user_id: string;
   to_user_id: string;
   text: string;
+  image?: string;
   read: boolean;
   created_at: string;
 };
@@ -104,18 +107,36 @@ export default function ChatScreen() {
     };
   }, [matchId, load]);
 
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  const pickImage = async () => {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.7,
+      base64: true,
+    });
+
+    if (!res.canceled && res.assets[0]) {
+      const a = res.assets[0];
+      const base64 = a.base64 ? `data:image/jpeg;base64,${a.base64}` : a.uri;
+      setSelectedImage(base64);
+    }
+  };
+
   const send = async () => {
     const body = text.trim();
-    if (!body || sending) return;
+    if ((!body && !selectedImage) || sending) return;
     setSending(true);
     setErr(null);
     try {
       const res = await api<{ message: Msg }>(`/matches/${matchId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ text: body }),
+        body: JSON.stringify({ text: body, image: selectedImage || undefined }),
       });
       setMessages((prev) => [...prev, res.message]);
       setText("");
+      setSelectedImage(null);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
     } catch (e: any) {
       setErr(e?.message || "Mesaj gönderilemedi");
@@ -162,11 +183,17 @@ export default function ChatScreen() {
                       end={{ x: 1, y: 1 }}
                       style={[styles.bubble, styles.mine]}
                     >
-                      <Text style={styles.textLight}>{item.text}</Text>
+                      {item.image ? (
+                        <Image source={{ uri: item.image }} style={styles.chatImage} />
+                      ) : null}
+                      {item.text ? <Text style={styles.textLight}>{item.text}</Text> : null}
                     </LinearGradient>
                   ) : (
                     <View style={[styles.bubble, styles.theirs]}>
-                      <Text style={styles.textDark}>{item.text}</Text>
+                      {item.image ? (
+                        <Image source={{ uri: item.image }} style={styles.chatImage} />
+                      ) : null}
+                      {item.text ? <Text style={styles.textDark}>{item.text}</Text> : null}
                     </View>
                   )}
                 </View>
@@ -186,7 +213,19 @@ export default function ChatScreen() {
 
         {err ? <Text style={styles.err}>{err}</Text> : null}
 
+        {selectedImage && (
+          <View style={styles.imagePreviewWrap}>
+            <Image source={{ uri: selectedImage }} style={styles.imagePreview} />
+            <TouchableOpacity onPress={() => setSelectedImage(null)} style={styles.removeImageBtn}>
+              <Ionicons name="close" size={16} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={styles.inputBar}>
+          <TouchableOpacity onPress={pickImage} style={styles.mediaBtn} testID="chat-pick-image">
+            <Ionicons name="image-outline" size={22} color={theme.rose} />
+          </TouchableOpacity>
           <TextInput
             testID="chat-input"
             value={text}
@@ -197,12 +236,16 @@ export default function ChatScreen() {
             multiline
             maxLength={500}
           />
-          <TouchableOpacity onPress={send} disabled={!text.trim() || sending} testID="chat-send">
+          <TouchableOpacity
+            onPress={send}
+            disabled={(!text.trim() && !selectedImage) || sending}
+            testID="chat-send"
+          >
             <LinearGradient
               colors={[theme.rose, "#8B5CF6"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[styles.sendBtn, (!text.trim() || sending) ? { opacity: 0.4 } : null]}
+              style={[styles.sendBtn, ((!text.trim() && !selectedImage) || sending) ? { opacity: 0.4 } : null]}
             >
               <Ionicons name="send" size={18} color="#fff" />
             </LinearGradient>
@@ -233,6 +276,30 @@ const styles = StyleSheet.create({
   theirs: { backgroundColor: theme.card, borderRadius: 18, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: theme.border },
   textLight: { color: "#fff", fontSize: 15, lineHeight: 21 },
   textDark: { color: theme.text, fontSize: 15, lineHeight: 21 },
+  chatImage: { width: 200, height: 200, borderRadius: radius.md, marginBottom: 6 },
+  imagePreviewWrap: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, position: "relative" },
+  imagePreview: { width: 70, height: 70, borderRadius: radius.md },
+  removeImageBtn: {
+    position: "absolute",
+    top: 4,
+    left: 60,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mediaBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.card,
+    borderWidth: 1,
+    borderColor: theme.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",
