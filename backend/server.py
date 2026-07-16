@@ -195,6 +195,18 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * R * math.asin(math.sqrt(a))
 
 
+def calculate_music_compatibility(u1_tags: list, u2_tags: list) -> int:
+    if not u1_tags or not u2_tags:
+        return 82  # Baseline default compatibility
+    s1, s2 = set(t.lower() for t in u1_tags), set(t.lower() for t in u2_tags)
+    intersection = len(s1.intersection(s2))
+    union = len(s1.union(s2))
+    if union == 0:
+        return 82
+    ratio = intersection / union
+    return min(99, max(65, int(70 + ratio * 29)))
+
+
 def public_user(user: dict, viewer: Optional[dict] = None, include_email: bool = False) -> dict:
     """Strip sensitive fields; compute distance if viewer has location.
 
@@ -217,9 +229,17 @@ def public_user(user: dict, viewer: Optional[dict] = None, include_email: bool =
         "city": user.get("city", ""),
         "onboarded": user.get("onboarded", False),
         "created_at": user.get("created_at"),
+        "is_premium": user.get("is_premium", False),
+        "boosted_until": user.get("boosted_until"),
     }
     if include_email or is_self:
         out["email"] = user.get("email")
+
+    if viewer and not is_self:
+        u1_music = viewer.get("music_tags") or viewer.get("interests") or []
+        u2_music = user.get("music_tags") or user.get("interests") or []
+        out["music_compatibility_pct"] = calculate_music_compatibility(u1_music, u2_music)
+
     if viewer and viewer.get("location") and user.get("location"):
         try:
             v = viewer["location"]
@@ -366,6 +386,7 @@ class ProfileUpdate(BaseModel):
 class PostCreate(BaseModel):
     text: str = Field(min_length=1, max_length=280)
     image: Optional[str] = None  # base64 data URI
+    voice_note: Optional[str] = None  # base64 audio data URI
 
 
 class CommentCreate(BaseModel):
@@ -604,6 +625,7 @@ async def create_post(payload: PostCreate, current=Depends(get_current_user)):
         "user_id": current["user_id"],
         "text": payload.text,
         "image": payload.image or "",
+        "voice_note": payload.voice_note or "",
         "likes": [],  # list of user_ids
         "likes_count": 0,
         "comments_count": 0,
@@ -619,6 +641,7 @@ def _hydrate_post(post: dict, author: dict, viewer: dict) -> dict:
         "post_id": post["post_id"],
         "text": post["text"],
         "image": post.get("image", ""),
+        "voice_note": post.get("voice_note", ""),
         "likes_count": post.get("likes_count", 0),
         "comments_count": post.get("comments_count", 0),
         "liked_by_me": viewer["user_id"] in (post.get("likes") or []),
@@ -877,6 +900,46 @@ async def _match_or_404(match_id: str, user_id: str) -> dict:
     return m
 
 
+# --- Hangout Signals (Feature 3) ---
+class SignalCreate(BaseModel):
+    title: str = Field(min_length=3, max_length=120)
+    category: Optional[str] = "Kahve/Etkinlik"
+    location_name: Optional[str] = "Kadıköy"
+
+
+@api.post("/signals")
+async def create_signal(payload: SignalCreate, current=Depends(get_current_user)):
+    safe, reason = await moderate_text(payload.title, current["user_id"])
+    if not safe:
+        raise HTTPException(status_code=400, detail=f"Sinyal reddedildi: {reason}")
+
+    doc = {
+        "signal_id": new_id("sig"),
+        "user_id": current["user_id"],
+        "title": payload.title,
+        "category": payload.category,
+        "location_name": payload.location_name,
+        "created_at": now_utc().isoformat(),
+        "expires_at": (now_utc() + timedelta(hours=6)).isoformat(),
+        "author": {
+            "user_id": current["user_id"],
+            "name": current.get("name", ""),
+            "handle": current.get("handle", ""),
+            "avatar": (current.get("photos") or [""])[0] if current.get("photos") else "",
+        }
+    }
+    await db.signals.insert_one(doc)
+    doc.pop("_id", None)
+    return {"signal": doc}
+
+
+@api.get("/signals")
+async def list_signals(current=Depends(get_current_user)):
+    now_iso = now_utc().isoformat()
+    signals = await db.signals.find({"expires_at": {"$gt": now_iso}}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return {"signals": signals}
+
+
 @api.get("/matches/{match_id}/messages")
 async def list_messages(match_id: str, current=Depends(get_current_user), after: Optional[str] = None):
     await _match_or_404(match_id, current["user_id"])
@@ -884,11 +947,76 @@ async def list_messages(match_id: str, current=Depends(get_current_user), after:
     if after:
         q["created_at"] = {"$gt": after}
     msgs = await db.messages.find(q, {"_id": 0}).sort("created_at", 1).limit(500).to_list(500)
+    
+    # Blind Date Chat: Calculate total message count and unblur progress
+    total_msgs = await db.messages.count_documents({"match_id": match_id})
+    is_unlocked = total_msgs >= 10
+
     # mark inbound as read
     await db.messages.update_many(
         {"match_id": match_id, "to_user_id": current["user_id"], "read": False}, {"$set": {"read": True}}
     )
-    return {"messages": msgs}
+    return {
+        "messages": msgs,
+        "blind_date": {
+            "message_count": total_msgs,
+            "required_messages": 10,
+            "is_unlocked": is_unlocked,
+            "progress_pct": min(100, int((total_msgs / 10.0) * 100))
+        }
+    }
+
+
+# --- AI Wingman (Feature 4) ---
+@api.post("/matches/{match_id}/wingman")
+async def ai_wingman(match_id: str, current=Depends(get_current_user)):
+    m = await _match_or_404(match_id, current["user_id"])
+    other_id = next(uid for uid in m["user_ids"] if uid != current["user_id"])
+    other_user = await db.users.find_one({"user_id": other_id}, {"_id": 0, "password": 0})
+    if not other_user:
+        raise HTTPException(status_code=404, detail="Eşleşilen kullanıcı bulunamadı")
+
+    top_post = await db.posts.find_one({"user_id": other_id}, {"_id": 0}, sort=[("likes_count", -1)])
+    top_text = top_post.get("text", "") if top_post else ""
+
+    if EMERGENT_LLM_KEY:
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=f"wingman_{uuid.uuid4().hex[:8]}",
+                system_message=(
+                    "You are AI Wingman, a witty, charming Turkish dating assistant. "
+                    "Generate EXACTLY 3 short, clever, playful icebreaker message suggestions in Turkish "
+                    "for the user to send to their match. Separate suggestions with '|||'. "
+                    "Do NOT number them, do NOT write intro/outro."
+                )
+            ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+
+            prompt = (
+                f"Match Name: {other_user.get('name')}\n"
+                f"Bio: {other_user.get('bio', '')}\n"
+                f"Vibe: {other_user.get('vibe_status', '')}\n"
+                f"Interests: {', '.join(other_user.get('interests', []))}\n"
+                f"Top post: {top_text}\n"
+            )
+
+            res = await asyncio.wait_for(chat.send_message(UserMessage(text=prompt)), timeout=8)
+            raw = str(res).strip()
+            parts = [p.strip() for p in raw.split("|||") if p.strip()]
+            if len(parts) >= 3:
+                return {"suggestions": parts[:3]}
+        except Exception as e:
+            log.warning("AI Wingman failed, using fallback: %s", e)
+
+    bio_topic = other_user.get("vibe_status") or (other_user.get("interests") or ["kahve"])[0]
+    return {
+        "suggestions": [
+            f"Vibe'ındaki {bio_topic} detayı harika, bu konuda fikrini merak ettim! ✨",
+            f"Sohbetimizi {other_user.get('name', 'birlikte')} efsane bir konuyla başlatmalıyız!",
+            f"Senin son paylaşımın gerçekten çok iyiydi, haklılık payın %100! 🔥"
+        ]
+    }
 
 
 @api.post("/matches/{match_id}/messages")

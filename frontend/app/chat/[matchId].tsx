@@ -34,30 +34,56 @@ type Msg = {
   created_at: string;
 };
 
+type BlindDateInfo = {
+  message_count: number;
+  required_messages: number;
+  is_unlocked: boolean;
+  progress_pct: number;
+};
+
 export default function ChatScreen() {
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
   const router = useRouter();
   const { user } = useAuth();
   const [messages, setMessages] = useState<Msg[]>([]);
+  const [blindDate, setBlindDate] = useState<BlindDateInfo | null>(null);
   const [other, setOther] = useState<{ user_id: string; name: string; photo?: string } | null>(null);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [wingmanOpen, setWingmanOpen] = useState(false);
+  const [wingmanBusy, setWingmanBusy] = useState(false);
+  const [wingmanSuggestions, setWingmanSuggestions] = useState<string[]>([]);
   const listRef = useRef<FlatList>(null);
   const pollRef = useRef<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const res = await api<{ messages: Msg[] }>(`/matches/${matchId}/messages`);
+      const res = await api<{ messages: Msg[]; blind_date?: BlindDateInfo }>(`/matches/${matchId}/messages`);
       setMessages(res.messages);
+      if (res.blind_date) setBlindDate(res.blind_date);
     } catch (e: any) {
       setErr(e?.message || "Sohbet yüklenemedi");
     } finally {
       setLoading(false);
     }
   }, [matchId]);
+
+  const loadWingman = async () => {
+    setWingmanOpen((o) => !o);
+    if (wingmanSuggestions.length > 0) return;
+    setWingmanBusy(true);
+    try {
+      const res = await api<{ suggestions: string[] }>(`/matches/${matchId}/wingman`, { method: "POST" });
+      setWingmanSuggestions(res.suggestions || []);
+    } catch (e: any) {
+      setWingmanSuggestions(["Vibe'ındaki detay harika, hakkında ne düşünüyorsun? ✨"]);
+    } finally {
+      setWingmanBusy(false);
+    }
+  };
 
   const loadOther = useCallback(async () => {
     try {
@@ -156,7 +182,46 @@ export default function ChatScreen() {
           <Text style={styles.name} numberOfLines={1}>{other?.name || "Sohbet"}</Text>
           <Text style={styles.status}>çevrimiçi ~ vibe modu ✨</Text>
         </View>
+        <TouchableOpacity onPress={loadWingman} style={styles.wingmanBtn} testID="chat-ai-wingman">
+          <Ionicons name="sparkles" size={16} color="#F59E0B" />
+          <Text style={styles.wingmanText}>AI Wingman</Text>
+        </TouchableOpacity>
       </View>
+
+      {/* Feature 2: Blind Date Progress Banner */}
+      {blindDate && (
+        <View style={styles.blindDateBanner}>
+          <Ionicons name={blindDate.is_unlocked ? "eye" : "eye-off"} size={16} color={theme.rose} />
+          <Text style={styles.blindDateText}>
+            {blindDate.is_unlocked
+              ? "🙈 Kör Randevu Kilidi Açıldı! Fotoğraflar %100 net."
+              : `🙈 Kör Randevu: 10 mesajda fotoğraflar açılır (${blindDate.message_count}/10 Mesaj)`}
+          </Text>
+        </View>
+      )}
+
+      {/* Feature 4: AI Wingman Suggestions Drawer */}
+      {wingmanOpen && (
+        <View style={styles.wingmanBox}>
+          <Text style={styles.wingmanBoxTitle}>🤖 AI Wingman Mesaj Önerileri:</Text>
+          {wingmanBusy ? (
+            <ActivityIndicator color={theme.rose} style={{ marginVertical: 10 }} />
+          ) : (
+            wingmanSuggestions.map((s, idx) => (
+              <TouchableOpacity
+                key={idx}
+                onPress={() => {
+                  setText(s);
+                  setWingmanOpen(false);
+                }}
+                style={styles.wingmanChip}
+              >
+                <Text style={styles.wingmanChipText}>✨ {s}</Text>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+      )}
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -269,6 +334,45 @@ const styles = StyleSheet.create({
   iconBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   name: { color: theme.text, fontWeight: "700", fontSize: 16 },
   status: { color: theme.cyan, fontSize: 11, fontWeight: "600" },
+  wingmanBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(245, 158, 11, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.4)",
+  },
+  wingmanText: { color: "#F59E0B", fontSize: 11, fontWeight: "700" },
+  blindDateBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 6,
+    backgroundColor: "rgba(244,63,94,0.12)",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(244,63,94,0.25)",
+  },
+  blindDateText: { color: theme.rose, fontSize: 12, fontWeight: "700" },
+  wingmanBox: {
+    backgroundColor: theme.card,
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+    gap: 8,
+  },
+  wingmanBoxTitle: { color: theme.text, fontSize: 13, fontWeight: "700" },
+  wingmanChip: {
+    backgroundColor: "rgba(139,92,246,0.15)",
+    padding: 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: "rgba(139,92,246,0.3)",
+  },
+  wingmanChipText: { color: theme.text, fontSize: 13, fontWeight: "600" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   bubbleWrap: { width: "100%" },
   bubble: { paddingHorizontal: 14, paddingVertical: 10, maxWidth: "80%" },

@@ -20,6 +20,7 @@ export type VibeUser = {
   distance_km?: number;
   is_premium?: boolean;
   boosted_until?: string;
+  music_compatibility_pct?: number;
 };
 
 type Ctx = {

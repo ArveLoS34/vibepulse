@@ -13,6 +13,7 @@ const HASHTAGS = ["Tüm", "Yazılım", "Urfa", "Müzik", "Kahve", "Gece", "Sanat
 
 export default function FeedScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
+  const [signals, setSignals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
@@ -26,6 +27,9 @@ export default function FeedScreen() {
         : "/posts/feed";
       const res = await api<{ posts: Post[] }>(url);
       setPosts(res.posts);
+
+      const sigRes = await api<{ signals: any[] }>("/signals");
+      setSignals(sigRes.signals || []);
       setErr(null);
     } catch (e: any) {
       setErr(e?.message || "Feed yüklenemedi");
@@ -87,6 +91,26 @@ export default function FeedScreen() {
             );
           })}
         </ScrollView>
+
+        {/* Feature 3: Hangout Signals */}
+        {signals.length > 0 && (
+          <View style={styles.signalsSection}>
+            <Text style={styles.signalsTitle}>📍 Canlı Buluşma Sinyalleri (6 Sa)</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 10, paddingTop: 6 }}
+            >
+              {signals.map((s) => (
+                <View key={s.signal_id} style={styles.signalCard}>
+                  <Text style={styles.signalLoc}>📍 {s.location_name || "Kadıköy"}</Text>
+                  <Text style={styles.signalText} numberOfLines={2}>{s.title}</Text>
+                  <Text style={styles.signalAuthor}>@{s.author?.handle || "kullanıcı"}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
       </View>
 
       {loading ? (
@@ -157,6 +181,19 @@ const styles = StyleSheet.create({
   },
   chipText: { color: theme.textDim, fontSize: 13, fontWeight: "600" },
   chipTextActive: { color: "#fff", fontWeight: "700" },
+  signalsSection: { marginTop: spacing.md },
+  signalsTitle: { color: theme.rose, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.8 },
+  signalCard: {
+    backgroundColor: theme.card,
+    borderRadius: radius.md,
+    padding: 10,
+    width: 150,
+    borderWidth: 1,
+    borderColor: "rgba(244,63,94,0.3)",
+  },
+  signalLoc: { color: theme.cyan, fontSize: 11, fontWeight: "700" },
+  signalText: { color: theme.text, fontSize: 12, fontWeight: "600", marginTop: 4, lineHeight: 16 },
+  signalAuthor: { color: theme.textMuted, fontSize: 11, marginTop: 4 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   empty: { alignItems: "center", padding: spacing.xxl, marginTop: 60, gap: 8 },
   emptyTitle: { color: theme.text, fontSize: 18, fontWeight: "700", marginTop: spacing.md },

@@ -252,6 +252,14 @@ function SwipeCard({ card, back }: { card: Card; back?: boolean }) {
         </View>
       ) : null}
       <View style={styles.cardBottom}>
+        {card.music_compatibility_pct ? (
+          <View style={styles.musicMatchBadge}>
+            <Ionicons name="musical-notes" size={14} color="#fff" />
+            <Text style={styles.musicMatchText}>
+              Müzik Uyumu: %{card.music_compatibility_pct} ✨
+            </Text>
+          </View>
+        ) : null}
         <Text style={styles.cardName}>
           {card.name}{card.age ? <Text style={styles.cardAge}>, {card.age}</Text> : null}
         </Text>
@@ -315,6 +323,20 @@ const styles = StyleSheet.create({
   topPostLabel: { color: theme.cyan, fontSize: 10, fontWeight: "800", letterSpacing: 1.4 },
   topPostText: { color: "#fff", fontSize: 18, fontWeight: "700", marginTop: 6, lineHeight: 24 },
   cardBottom: { position: "absolute", bottom: 0, left: 0, right: 0, padding: spacing.xl },
+  musicMatchBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(139, 92, 246, 0.4)",
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    alignSelf: "flex-start",
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: "rgba(139, 92, 246, 0.6)",
+  },
+  musicMatchText: { color: "#fff", fontSize: 12, fontWeight: "700" },
   cardName: { color: "#fff", fontSize: 30, fontWeight: "900", letterSpacing: -0.5 },
   cardAge: { fontWeight: "400", fontSize: 26, color: "#E4E4E7" },
   vibePill: {

@@ -2,6 +2,7 @@ import React from "react";
 import { Image, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { Audio } from "expo-av";
 import { Avatar } from "@/src/components/Avatar";
 import { theme, radius, spacing } from "@/src/lib/theme";
 import { api } from "@/src/lib/api";
@@ -18,6 +19,7 @@ export type Post = {
   post_id: string;
   text: string;
   image?: string;
+  voice_note?: string;
   likes_count: number;
   comments_count: number;
   liked_by_me: boolean;
@@ -42,11 +44,42 @@ export function PostCard({ post, onChange }: { post: Post; onChange?: (p: Post) 
   const router = useRouter();
   const [liked, setLiked] = React.useState(post.liked_by_me);
   const [count, setCount] = React.useState(post.likes_count);
+  const [playingAudio, setPlayingAudio] = React.useState(false);
+  const soundRef = React.useRef<Audio.Sound | null>(null);
 
   React.useEffect(() => {
     setLiked(post.liked_by_me);
     setCount(post.likes_count);
   }, [post.liked_by_me, post.likes_count]);
+
+  const toggleAudio = async () => {
+    if (!post.voice_note) return;
+    try {
+      if (soundRef.current) {
+        if (playingAudio) {
+          await soundRef.current.pauseAsync();
+          setPlayingAudio(false);
+        } else {
+          await soundRef.current.playAsync();
+          setPlayingAudio(true);
+        }
+      } else {
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: post.voice_note },
+          { shouldPlay: true }
+        );
+        soundRef.current = sound;
+        setPlayingAudio(true);
+        sound.setOnPlaybackStatusUpdate((status: any) => {
+          if (status.didJustFinish) {
+            setPlayingAudio(false);
+          }
+        });
+      }
+    } catch {
+      setPlayingAudio(false);
+    }
+  };
 
   const toggleLike = async () => {
     const prev = { liked, count };
@@ -91,6 +124,25 @@ export function PostCard({ post, onChange }: { post: Post; onChange?: (p: Post) 
           </View>
         ) : null}
         <Text style={styles.body}>{post.text}</Text>
+
+        {post.voice_note ? (
+          <TouchableOpacity
+            onPress={toggleAudio}
+            style={styles.voicePlayer}
+            testID={`voice-${post.post_id}`}
+          >
+            <View style={styles.voicePlayBtn}>
+              <Ionicons name={playingAudio ? "pause" : "play"} size={16} color="#fff" />
+            </View>
+            <View style={styles.voiceWaveform}>
+              {[12, 20, 8, 24, 16, 22, 10, 18, 14, 24, 8, 16, 22, 10].map((h, i) => (
+                <View key={i} style={[styles.waveBar, { height: h }, playingAudio && { backgroundColor: theme.rose }]} />
+              ))}
+            </View>
+            <Text style={styles.voiceTime}>0:15</Text>
+          </TouchableOpacity>
+        ) : null}
+
         {post.image ? <Image source={{ uri: post.image }} style={styles.media} /> : null}
         <View style={styles.actionsRow}>
           <TouchableOpacity onPress={goPost} style={styles.action} testID={`comment-${post.post_id}`}>
@@ -140,6 +192,29 @@ const styles = StyleSheet.create({
   },
   vibeText: { color: theme.rose, fontSize: 11, fontWeight: "600" },
   body: { color: theme.text, fontSize: 15.5, lineHeight: 22, marginTop: 4 },
+  voicePlayer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: theme.card,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: radius.pill,
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  voicePlayBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.rose,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  voiceWaveform: { flexDirection: "row", alignItems: "center", gap: 3, flex: 1 },
+  waveBar: { width: 3, borderRadius: 2, backgroundColor: theme.borderStrong },
+  voiceTime: { color: theme.textDim, fontSize: 12, fontWeight: "600" },
   media: { width: "100%", height: 200, borderRadius: radius.md, marginTop: spacing.sm, backgroundColor: theme.cardAlt },
   actionsRow: { flexDirection: "row", alignItems: "center", gap: 22, marginTop: spacing.md },
   action: { flexDirection: "row", alignItems: "center", gap: 6 },
