@@ -32,6 +32,7 @@ type Ctx = {
   loginGoogle: (sessionId: string) => Promise<void>;
   updateProfile: (patch: Partial<VibeUser> & { location?: any }) => Promise<void>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 };
 
 const AuthContext = createContext<Ctx | null>(null);
@@ -107,8 +108,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const deleteAccount = async () => {
+    try {
+      await api("/users/me", { method: "DELETE" });
+    } catch {
+      // Ignore errors during deletion
+    } finally {
+      await clearToken();
+      setUser(null);
+    }
+  };
+
   const value = useMemo<Ctx>(
-    () => ({ loading, user, refresh, loginPassword, register, loginGoogle, updateProfile, logout }),
+    () => ({ loading, user, refresh, loginPassword, register, loginGoogle, updateProfile, logout, deleteAccount }),
     [loading, user, refresh]
   );
 

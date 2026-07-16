@@ -46,6 +46,25 @@ export default function PublicProfile() {
     } catch {}
   };
 
+  const blockUser = async () => {
+    if (!user) return;
+    try {
+      await api(`/users/${user.user_id}/block`, { method: "POST" });
+      router.back();
+    } catch {}
+  };
+
+  const reportUser = async () => {
+    if (!user) return;
+    try {
+      await api("/reports", {
+        method: "POST",
+        body: JSON.stringify({ target_user_id: user.user_id, reason: "Uygunsuz içerik" }),
+      });
+      alert("Şikayetiniz moderasyon ekibimize iletildi. Teşekkürler.");
+    } catch {}
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={["top", "bottom"]}>
       <View style={styles.header}>
@@ -53,7 +72,14 @@ export default function PublicProfile() {
           <Ionicons name="chevron-back" size={22} color={theme.text} />
         </Pressable>
         <Text style={styles.headerTitle}>{user?.name || "Profil"}</Text>
-        <View style={{ width: 40 }} />
+        <View style={{ flexDirection: "row", gap: 4 }}>
+          <Pressable onPress={reportUser} style={styles.iconBtn} testID="profile-report">
+            <Ionicons name="flag-outline" size={18} color={theme.textDim} />
+          </Pressable>
+          <Pressable onPress={blockUser} style={styles.iconBtn} testID="profile-block">
+            <Ionicons name="ban-outline" size={18} color={theme.danger} />
+          </Pressable>
+        </View>
       </View>
 
       {loading || !user ? (

@@ -184,6 +184,8 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    if user.get("is_banned"):
+        raise HTTPException(status_code=403, detail="Hesabınız askıya alındı.")
     return user
 
 
@@ -409,6 +411,26 @@ class PushTokenIn(BaseModel):
 
 class GoogleSessionIn(BaseModel):
     session_id: str
+
+
+class ReportCreate(BaseModel):
+    target_user_id: Optional[str] = None
+    post_id: Optional[str] = None
+    reason: str = Field(min_length=3, max_length=300)
+
+
+class StoryCreate(BaseModel):
+    text: Optional[str] = Field(default="", max_length=280)
+    image: Optional[str] = None
+    voice_note: Optional[str] = None
+
+
+class QuizAnswersIn(BaseModel):
+    answers: dict[str, str]
+
+
+class AdminResolveReportIn(BaseModel):
+    action: Literal["dismiss", "delete_content", "ban_user"]
 
 
 # ------------------------- routes -------------------------
@@ -1200,6 +1222,201 @@ async def websocket_chat(websocket: WebSocket, match_id: str, token: Optional[st
     except Exception as e:
         log.warning("WebSocket chat error: %s", e)
         ws_manager.disconnect(match_id, websocket)
+
+
+# --- App Store & Google Play Compliance (Block, Report, Account Deletion) ---
+async def _get_blocked_user_ids(user_id: str) -> set[str]:
+    blocks1 = await db.blocks.find({"user_id": user_id}, {"_id": 0, "blocked_user_id": 1}).to_list(1000)
+    blocks2 = await db.blocks.find({"blocked_user_id": user_id}, {"_id": 0, "user_id": 1}).to_list(1000)
+    blocked_ids = {b["blocked_user_id"] for b in blocks1}
+    blocked_ids.update({b["user_id"] for b in blocks2})
+    return blocked_ids
+
+
+@api.post("/users/{target_id}/block")
+async def block_user(target_id: str, current=Depends(get_current_user)):
+    if target_id == current["user_id"]:
+        raise HTTPException(status_code=400, detail="Kendinizi engelleyemezsiniz.")
+
+    await db.blocks.update_one(
+        {"user_id": current["user_id"], "blocked_user_id": target_id},
+        {"$set": {"created_at": now_utc().isoformat()}},
+        upsert=True
+    )
+    return {"message": "Kullanıcı engellendi."}
+
+
+@api.delete("/users/{target_id}/block")
+async def unblock_user(target_id: str, current=Depends(get_current_user)):
+    await db.blocks.delete_one({"user_id": current["user_id"], "blocked_user_id": target_id})
+    return {"message": "Engelleme kaldırıldı."}
+
+
+@api.get("/users/me/blocked")
+async def list_blocked(current=Depends(get_current_user)):
+    blocks = await db.blocks.find({"user_id": current["user_id"]}, {"_id": 0}).to_list(200)
+    uids = [b["blocked_user_id"] for b in blocks]
+    users = await db.users.find({"user_id": {"$in": uids}}, {"_id": 0, "password": 0}).to_list(len(uids))
+    return {"blocked_users": [public_user(u, viewer=current) for u in users]}
+
+
+@api.post("/reports")
+async def create_report(payload: ReportCreate, current=Depends(get_current_user)):
+    doc = {
+        "report_id": new_id("rep"),
+        "reporter_id": current["user_id"],
+        "target_user_id": payload.target_user_id,
+        "post_id": payload.post_id,
+        "reason": payload.reason,
+        "status": "pending",
+        "created_at": now_utc().isoformat(),
+    }
+    await db.reports.insert_one(doc)
+    doc.pop("_id", None)
+    return {"message": "Bildiriminiz moderasyon ekibine iletildi. Teşekkür ederiz.", "report": doc}
+
+
+@api.delete("/users/me")
+async def delete_account(authorization: Optional[str] = Header(None), current=Depends(get_current_user)):
+    user_id = current["user_id"]
+    await db.users.delete_one({"user_id": user_id})
+    await db.posts.delete_many({"user_id": user_id})
+    await db.comments.delete_many({"user_id": user_id})
+    await db.swipes.delete_many({"$or": [{"user_id": user_id}, {"target_user_id": user_id}]})
+    await db.matches.delete_many({"user_ids": user_id})
+    await db.messages.delete_many({"$or": [{"from_user_id": user_id}, {"to_user_id": user_id}]})
+    await db.signals.delete_many({"user_id": user_id})
+    await db.stories.delete_many({"user_id": user_id})
+
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+        await revoke_token(token)
+
+    return {"message": "Hesabınız ve tüm verileriniz kalıcı olarak silindi."}
+
+
+# --- 24-Hour Vibe Stories ---
+@api.post("/stories")
+async def create_story(payload: StoryCreate, current=Depends(get_current_user)):
+    if payload.image:
+        _validate_image(payload.image)
+
+    doc = {
+        "story_id": new_id("str"),
+        "user_id": current["user_id"],
+        "text": payload.text or "",
+        "image": payload.image or "",
+        "voice_note": payload.voice_note or "",
+        "created_at": now_utc().isoformat(),
+        "expires_at": (now_utc() + timedelta(hours=24)).isoformat(),
+        "author": {
+            "user_id": current["user_id"],
+            "name": current.get("name", ""),
+            "handle": current.get("handle", ""),
+            "avatar": (current.get("photos") or [""])[0] if current.get("photos") else "",
+        }
+    }
+    await db.stories.insert_one(doc)
+    doc.pop("_id", None)
+    return {"story": doc}
+
+
+@api.get("/stories")
+async def list_stories(current=Depends(get_current_user)):
+    blocked_ids = await _get_blocked_user_ids(current["user_id"])
+    now_iso = now_utc().isoformat()
+    raw = await db.stories.find(
+        {"expires_at": {"$gt": now_iso}, "user_id": {"$nin": list(blocked_ids)}},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+
+    grouped: dict[str, dict] = {}
+    for s in raw:
+        uid = s["user_id"]
+        if uid not in grouped:
+            grouped[uid] = {
+                "user": s["author"],
+                "stories": []
+            }
+        grouped[uid]["stories"].append(s)
+
+    return {"stories_feed": list(grouped.values())}
+
+
+# --- Vibe Quiz Matches ---
+@api.post("/quiz/answers")
+async def save_quiz_answers(payload: QuizAnswersIn, current=Depends(get_current_user)):
+    await db.users.update_one(
+        {"user_id": current["user_id"]},
+        {"$set": {"quiz_answers": payload.answers, "quiz_updated_at": now_utc().isoformat()}}
+    )
+    return {"message": "Kişilik quiz cevapları kaydedildi!"}
+
+
+@api.get("/quiz/compatibility/{target_id}")
+async def get_quiz_compatibility(target_id: str, current=Depends(get_current_user)):
+    target = await db.users.find_one({"user_id": target_id}, {"_id": 0, "quiz_answers": 1, "name": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+
+    q1 = current.get("quiz_answers") or {}
+    q2 = target.get("quiz_answers") or {}
+
+    if not q1 or not q2:
+        return {"compatibility_pct": 75, "common_answers": 0, "total_questions": 0}
+
+    keys = set(q1.keys()).intersection(set(q2.keys()))
+    if not keys:
+        return {"compatibility_pct": 75, "common_answers": 0, "total_questions": 0}
+
+    matches = sum(1 for k in keys if q1[k] == q2[k])
+    pct = min(99, max(50, int((matches / len(keys)) * 100)))
+    return {
+        "compatibility_pct": pct,
+        "common_answers": matches,
+        "total_questions": len(keys)
+    }
+
+
+# --- Admin Panel & Moderation Endpoints ---
+@api.get("/admin/stats")
+async def admin_stats(current=Depends(get_current_user)):
+    total_users = await db.users.count_documents({})
+    total_posts = await db.posts.count_documents({})
+    total_matches = await db.matches.count_documents({})
+    premium_users = await db.users.count_documents({"is_premium": True})
+    pending_reports = await db.reports.count_documents({"status": "pending"})
+
+    return {
+        "stats": {
+            "total_users": total_users,
+            "total_posts": total_posts,
+            "total_matches": total_matches,
+            "premium_users": premium_users,
+            "pending_reports": pending_reports,
+        }
+    }
+
+
+@api.get("/admin/reports")
+async def list_admin_reports(current=Depends(get_current_user)):
+    reports = await db.reports.find({"status": "pending"}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return {"reports": reports}
+
+
+@api.post("/admin/reports/{report_id}/resolve")
+async def resolve_admin_report(report_id: str, payload: AdminResolveReportIn, current=Depends(get_current_user)):
+    rep = await db.reports.find_one({"report_id": report_id})
+    if not rep:
+        raise HTTPException(status_code=404, detail="Rapor bulunamadı")
+
+    if payload.action == "delete_content" and rep.get("post_id"):
+        await db.posts.delete_one({"post_id": rep["post_id"]})
+    elif payload.action == "ban_user" and rep.get("target_user_id"):
+        await db.users.update_one({"user_id": rep["target_user_id"]}, {"$set": {"is_banned": True}})
+
+    await db.reports.update_one({"report_id": report_id}, {"$set": {"status": f"resolved_{payload.action}"}})
+    return {"message": f"Rapor işlem yapıldı: {payload.action}"}
 
 
 # ------------------------- boot -------------------------

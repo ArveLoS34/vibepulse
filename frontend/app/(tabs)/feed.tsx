@@ -6,6 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "expo-router";
 import { PostCard, Post } from "@/src/components/PostCard";
 import { ComposeModal } from "@/src/components/ComposeModal";
+import { Avatar } from "@/src/components/Avatar";
 import { api } from "@/src/lib/api";
 import { theme, radius, spacing } from "@/src/lib/theme";
 
@@ -14,6 +15,7 @@ const HASHTAGS = ["Tüm", "Yazılım", "Urfa", "Müzik", "Kahve", "Gece", "Sanat
 export default function FeedScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [signals, setSignals] = useState<any[]>([]);
+  const [stories, setStories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
@@ -30,6 +32,10 @@ export default function FeedScreen() {
 
       const sigRes = await api<{ signals: any[] }>("/signals");
       setSignals(sigRes.signals || []);
+
+      const storyRes = await api<{ stories_feed: any[] }>("/stories");
+      setStories(storyRes.stories_feed || []);
+
       setErr(null);
     } catch (e: any) {
       setErr(e?.message || "Feed yüklenemedi");
@@ -68,6 +74,30 @@ export default function FeedScreen() {
           </LinearGradient>
           <Text style={styles.brand}>VibePulse</Text>
         </View>
+
+        {/* 24h Vibe Stories Circles Bar */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginTop: spacing.sm }}
+          contentContainerStyle={{ gap: 14, paddingRight: spacing.md }}
+        >
+          {stories.map((st, i) => (
+            <View key={i} style={styles.storyWrap}>
+              <LinearGradient
+                colors={[theme.rose, "#8B5CF6"]}
+                style={styles.storyRing}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Avatar uri={st.user?.avatar} name={st.user?.name || "?"} size={48} />
+              </LinearGradient>
+              <Text style={styles.storyName} numberOfLines={1}>
+                {st.user?.name?.split(" ")[0] || "Vibe"}
+              </Text>
+            </View>
+          ))}
+        </ScrollView>
 
         {/* B4: Hashtag Chip Bar */}
         <ScrollView
@@ -166,6 +196,9 @@ const styles = StyleSheet.create({
   brandRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   logo: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   brand: { color: theme.text, fontWeight: "800", fontSize: 18, letterSpacing: -0.3 },
+  storyWrap: { alignItems: "center", width: 56 },
+  storyRing: { padding: 2, borderRadius: 28 },
+  storyName: { color: theme.textDim, fontSize: 11, fontWeight: "600", marginTop: 4 },
   chipBar: { marginTop: spacing.sm },
   chip: {
     paddingHorizontal: 14,

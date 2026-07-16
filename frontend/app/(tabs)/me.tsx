@@ -13,7 +13,7 @@ import { Avatar } from "@/src/components/Avatar";
 
 export default function MeScreen() {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, deleteAccount } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -136,6 +136,18 @@ export default function MeScreen() {
         ) : (
           posts.map((p) => <PostCard key={p.post_id} post={p} />)
         )}
+
+        {/* Apple Store mandatory account deletion button */}
+        <View style={{ paddingHorizontal: spacing.lg, marginVertical: spacing.xl }}>
+          <TouchableOpacity
+            onPress={deleteAccount}
+            style={styles.deleteAccountBtn}
+            testID="delete-account-btn"
+          >
+            <Ionicons name="trash-outline" size={18} color={theme.danger} />
+            <Text style={styles.deleteAccountText}>Hesabımı Kalıcı Olarak Sil</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -174,4 +186,16 @@ const styles = StyleSheet.create({
   sectionTitle: { color: theme.textDim, fontSize: 12, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1.2, marginBottom: spacing.sm },
   gridPhoto: { width: 130, height: 170, borderRadius: radius.md, backgroundColor: theme.card },
   emptyText: { color: theme.textDim, textAlign: "center" },
+  deleteAccountBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(239, 68, 68, 0.3)",
+  },
+  deleteAccountText: { color: theme.danger, fontWeight: "700", fontSize: 14 },
 });
