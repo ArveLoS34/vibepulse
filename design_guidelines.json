@@ -1,0 +1,107 @@
+{
+  "theme": "dark",
+  "app_archetype": "Electric & Neon (Future, Speed, Disruption) adapted for Emotional Connection",
+  "typography": {
+    "heading_font": "Outfit",
+    "body_font": "Manrope",
+    "hierarchy": {
+      "h1": "text-4xl font-bold tracking-tight",
+      "h2": "text-2xl font-semibold tracking-tight",
+      "h3": "text-xl font-medium",
+      "body": "text-base leading-relaxed",
+      "small": "text-sm text-zinc-400 font-medium tracking-wide"
+    }
+  },
+  "colors": {
+    "background": "bg-zinc-950",
+    "surface": "bg-zinc-900/80",
+    "card": "bg-zinc-900",
+    "primary_accent": "text-rose-500 bg-rose-500",
+    "primary_hover": "bg-rose-600",
+    "secondary_accent": "text-cyan-400 bg-cyan-400",
+    "text_primary": "text-zinc-50",
+    "text_secondary": "text-zinc-400",
+    "border": "border-white/10"
+  },
+  "visual_enhancers": {
+    "glassmorphism": "backdrop-blur-xl bg-zinc-900/80 border-t border-white/10",
+    "shadows": "shadow-[0_8px_32px_rgba(225,29,72,0.15)]",
+    "border_radius": {
+      "cards": "rounded-3xl",
+      "buttons": "rounded-full",
+      "inputs": "rounded-2xl"
+    },
+    "gradients": "bg-gradient-to-br from-rose-500 to-purple-600"
+  },
+  "layouts": {
+    "app_container": "w-full max-w-md mx-auto h-[100dvh] overflow-hidden relative shadow-2xl ring-1 ring-white/10 bg-zinc-950 flex flex-col",
+    "scroll_area": "flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide pb-24",
+    "bento_grid": "grid grid-cols-2 gap-4",
+    "swipe_deck": "relative w-full h-[65vh] flex items-center justify-center mt-4"
+  },
+  "motion": {
+    "swipe_cards": "Use Framer Motion drag='x', dragConstraints={{ left: 0, right: 0 }} for swipeable cards. Add rotation on drag.",
+    "heart_pulse": "animate-pulse for active match/like states",
+    "page_transitions": "Slide up/down transitions for the match modal using Framer Motion AnimatePresence."
+  },
+  "components": {
+    "BottomNav": {
+      "styles": "fixed bottom-0 w-full max-w-md h-20 flex items-center justify-around backdrop-blur-2xl bg-zinc-950/85 border-t border-white/10 z-50",
+      "behavior": "Active state should have the icon colored rose-500 with a subtle glowing dot below it."
+    },
+    "FeedPost": {
+      "styles": "p-5 border-b border-white/5 flex gap-4",
+      "elements": "Left: Avatar. Right: Username, handle, timestamp, text (Outfit font for thoughts to give them weight), action bar (Vibe/Heart, Comment, Share)."
+    },
+    "SwipeCard": {
+      "styles": "absolute w-[90%] h-full rounded-3xl overflow-hidden bg-zinc-900 border border-white/10 shadow-2xl",
+      "elements": "Top 60%: Huge typography showing the user's best 'Thought/Post' (e.g. 'Unpopular opinion: ...'). Bottom 40%: Images in a horizontal scrolling bento, Name, Age, Distance. Gradient overlay to ensure text readability."
+    },
+    "MatchModal": {
+      "styles": "fixed inset-0 z-50 bg-zinc-950/95 backdrop-blur-md flex flex-col items-center justify-center text-center p-6",
+      "elements": "Pulsing glowing gradient orb behind two overlapping avatars. 'Vibe Matched' huge text."
+    },
+    "ProfileBento": {
+      "styles": "grid grid-cols-2 gap-4 p-4",
+      "elements": "Span-2 cell for Bio/Stats, Span-1 for photos, Span-1 for Music/Spotify tags, Span-2 for Top Tweets/Thoughts."
+    }
+  },
+  "accessibility": {
+    "contrast": "Ensure primary text has minimum 4.5:1 against zinc-900. Use text-shadow on text overlapping images.",
+    "touch_targets": "Minimum 48x48px for all actionable icons in BottomNav and Feed.",
+    "motion": "Respect prefers-reduced-motion for swipe animations."
+  },
+  "image_urls": {
+    "user_avatar_1": {
+      "url": "https://images.unsplash.com/photo-1612203304476-2ed23c55b5b9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwxfHxjYW5kaWQlMjBwb3J0cmFpdCUyMGV4cHJlc3NpdmUlMjB5b3V0aHxlbnwwfHx8fDE3ODQxNTc3MjJ8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Expressive young woman smiling (Use for main demo profile or swipe card)"
+    },
+    "user_avatar_2": {
+      "url": "https://images.unsplash.com/photo-1517256673644-36ad11246d21?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwyfHxjYW5kaWQlMjBwb3J0cmFpdCUyMGV4cHJlc3NpdmUlMjB5b3V0aHxlbnwwfHx8fDE3ODQxNTc3MjJ8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Edgy girl with glasses (Use for feed posts)"
+    },
+    "user_avatar_3": {
+      "url": "https://images.unsplash.com/photo-1653146886577-0ea51f5b36f5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwxfHxzdHlsaXNoJTIwZ3V5JTIwcG9ydHJhaXQlMjBvdXRkb29yfGVufDB8fHx8MTc4NDE1NzcyN3ww&ixlib=rb-4.1.0&q=85",
+      "description": "Stylish guy outdoor (Use for matches or feed)"
+    },
+    "feed_media_1": {
+      "url": "https://images.unsplash.com/photo-1502872364588-894d7d6ddfab?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTN8MHwxfHNlYXJjaHwxfHxjb25jZXJ0JTIwY3Jvd2QlMjBuZW9ufGVufDB8fHx8MTc4NDE1NzcyMnww&ixlib=rb-4.1.0&q=85",
+      "description": "Neon concert crowd (Use as attached media in a feed post)"
+    }
+  },
+  "instructions_to_main_agent": [
+    "CRITICAL: Wrap the entire application routing/layout in `<div className='bg-black min-h-screen flex items-center justify-center'><div className='w-full max-w-md mx-auto h-[100dvh] bg-zinc-950 relative overflow-hidden shadow-2xl sm:border sm:border-white/10 sm:rounded-[3rem]'>...</div></div>`. This forces the desktop view to look exactly like a mobile app screen.",
+    "Use Lucide-React for all icons (Home, Sparkles/Flame for match, MessageCircle, User).",
+    "Implement Framer Motion for the Swipe functionality. Make the SwipeCard draggable strictly on the X-axis. On drag end > threshold, animate out to the side.",
+    "The Feed should look similar to Twitter but with a darker, more neon 'nightlife' club aesthetic. Buttons should have subtle hover glows.",
+    "Match screen should be bold. Use the rose-500 gradient aggressively here.",
+    "Do not use generic Shadcn cards without stripping the border and adding custom rounded-3xl and bg-zinc-900. Stick to pure Tailwind HTML for structural layouts when possible to ensure the mobile proportions aren't ruined by desktop-focused library defaults.",
+    "Add 'data-testid' to interactive elements (e.g., 'like-button', 'swipe-right', 'nav-profile')."
+  ],
+  "universal_guidelines_for_main_agent": {
+    "anti_slop": "Do not make generic centered layouts. Ensure depth with layered z-indexes. Use glass-morphism (backdrop-blur-xl).",
+    "animations": "Every interaction needs micro-animations. No 'transition-all', only specific transitions (transform, opacity).",
+    "spacing": "Use generous padding inside cards, but keep the overall container dense enough for mobile.",
+    "testing": "All interactive elements MUST include data-testid attribute for automated testing."
+  }
+}
