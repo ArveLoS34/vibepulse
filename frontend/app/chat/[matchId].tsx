@@ -15,7 +15,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { api } from "@/src/lib/api";
+import { api, TOKEN_KEY } from "@/src/lib/api";
+import { storage } from "@/src/utils/storage";
 import { useAuth } from "@/src/context/AuthContext";
 import { Avatar } from "@/src/components/Avatar";
 import { theme, radius, spacing } from "@/src/lib/theme";
@@ -42,6 +43,7 @@ export default function ChatScreen() {
   const [err, setErr] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
   const pollRef = useRef<any>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -67,10 +69,40 @@ export default function ChatScreen() {
     loadOther();
   }, [load, loadOther]);
 
+  // B3: WebSocket Realtime Connection + Polling Fallback
   useEffect(() => {
-    pollRef.current = setInterval(load, 4000);
-    return () => clearInterval(pollRef.current);
-  }, [load]);
+    async function initWs() {
+      try {
+        const token = await storage.secureGet<string>(TOKEN_KEY, "");
+        if (!token) return;
+        const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+        const wsUrl = backendUrl.replace(/^http/, "ws") + `/api/ws/chat/${matchId}?token=${encodeURIComponent(token)}`;
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+
+        ws.onmessage = (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (data.type === "new_message" && data.message) {
+              setMessages((prev) => {
+                if (prev.some((m) => m.message_id === data.message.message_id)) return prev;
+                return [...prev, data.message];
+              });
+              setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
+            }
+          } catch {}
+        };
+      } catch {}
+    }
+
+    initWs();
+
+    pollRef.current = setInterval(load, 5000);
+    return () => {
+      clearInterval(pollRef.current);
+      wsRef.current?.close();
+    };
+  }, [matchId, load]);
 
   const send = async () => {
     const body = text.trim();

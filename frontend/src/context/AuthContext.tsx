@@ -17,6 +17,8 @@ export type VibeUser = {
   city?: string;
   onboarded?: boolean;
   distance_km?: number;
+  is_premium?: boolean;
+  boosted_until?: string;
 };
 
 type Ctx = {

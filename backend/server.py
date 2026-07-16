@@ -16,6 +16,7 @@ import logging
 import math
 import os
 import random
+import re
 import time
 import uuid
 from collections import defaultdict, deque
@@ -27,7 +28,7 @@ import bcrypt
 import httpx
 import jwt
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
 from starlette.middleware.cors import CORSMiddleware
@@ -65,7 +66,28 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 log = logging.getLogger("vibepulse")
 
 
-# ---------------------------- utils ----------------------------
+# ---------------------------- websocket manager ----------------------------
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict[str, list[WebSocket]] = defaultdict(list)
+
+    async def connect(self, match_id: str, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections[match_id].append(websocket)
+
+    def disconnect(self, match_id: str, websocket: WebSocket):
+        if websocket in self.active_connections[match_id]:
+            self.active_connections[match_id].remove(websocket)
+
+    async def broadcast(self, match_id: str, message: dict):
+        for conn in list(self.active_connections[match_id]):
+            try:
+                await conn.send_json(message)
+            except Exception:
+                pass
+
+
+ws_manager = ConnectionManager()
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -585,8 +607,17 @@ async def _fetch_posts(query: dict, viewer: dict, limit: int = 50) -> list[dict]
 
 
 @api.get("/posts/feed")
-async def feed(current=Depends(get_current_user), limit: int = Query(50, le=100)):
-    posts = await _fetch_posts({}, current, limit)
+async def feed(
+    current=Depends(get_current_user),
+    limit: int = Query(50, le=100),
+    tag: Optional[str] = Query(None)
+):
+    query = {}
+    if tag:
+        clean_tag = tag.lstrip("#").strip()
+        if clean_tag:
+            query["text"] = {"$regex": rf"#?{re.escape(clean_tag)}", "$options": "i"}
+    posts = await _fetch_posts(query, current, limit)
     return {"posts": posts}
 
 
@@ -673,7 +704,11 @@ async def add_comment(post_id: str, payload: CommentCreate, current=Depends(get_
 
 # --- Discover / Swipe / Match ---
 @api.get("/discover")
-async def discover(current=Depends(get_current_user), limit: int = 20):
+async def discover(
+    current=Depends(get_current_user),
+    limit: int = 20,
+    max_distance_km: Optional[float] = Query(None)
+):
     # exclude self + already swiped
     swiped = await db.swipes.find({"user_id": current["user_id"]}, {"_id": 0, "target_user_id": 1}).to_list(1000)
     excluded = {s["target_user_id"] for s in swiped}
@@ -683,14 +718,20 @@ async def discover(current=Depends(get_current_user), limit: int = 20):
     ori = current.get("orientation")
     if ori and ori != "everyone":
         q["gender"] = ori
-    users = await db.users.find(q, {"_id": 0, "password": 0}).limit(limit * 3).to_list(limit * 3)
-    # attach top post
+    users = await db.users.find(q, {"_id": 0, "password": 0}).sort("boosted_until", -1).limit(limit * 5).to_list(limit * 5)
+    
     out = []
-    for u in users[:limit]:
+    for u in users:
+        if len(out) >= limit:
+            break
+        p = public_user(u, viewer=current)
+        if max_distance_km is not None:
+            dist = p.get("distance_km")
+            if dist is not None and dist > max_distance_km:
+                continue
         top = await db.posts.find_one(
             {"user_id": u["user_id"]}, {"_id": 0}, sort=[("likes_count", -1), ("created_at", -1)]
         )
-        p = public_user(u, viewer=current)
         p["top_post"] = top
         out.append(p)
     return {"cards": out}
@@ -813,6 +854,154 @@ async def send_message(match_id: str, payload: MessageCreate, current=Depends(ge
     await db.matches.update_one({"match_id": match_id}, {"$set": {"last_message_at": doc["created_at"]}})
     doc.pop("_id", None)
     return {"message": doc}
+
+
+# --- Option B: Premium Subscription & Features ---
+class CheckoutSessionIn(BaseModel):
+    price_id: Optional[str] = "price_premium_monthly"
+
+
+@api.get("/users/likes-me")
+async def get_likes_me(current=Depends(get_current_user)):
+    swipes = await db.swipes.find(
+        {"target_user_id": current["user_id"], "action": {"$in": ["like", "super"]}},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+
+    if not swipes:
+        return {"count": 0, "is_premium": current.get("is_premium", False), "likes": []}
+
+    uids = [s["user_id"] for s in swipes]
+    likers = await db.users.find({"user_id": {"$in": uids}}, {"_id": 0, "password": 0}).to_list(len(uids))
+    lmap = {u["user_id"]: u for u in likers}
+
+    is_prem = current.get("is_premium", False)
+    out = []
+    for s in swipes:
+        u = lmap.get(s["user_id"])
+        if not u:
+            continue
+        pub = public_user(u, viewer=current)
+        if not is_prem:
+            pub["name"] = u.get("name", "")[0] + "***" if u.get("name") else "Vibe Kullanıcısı"
+            pub["photos"] = ["https://assets.emergent.sh/placeholders/blurred_avatar.png"]
+            pub["is_locked"] = True
+        else:
+            pub["is_locked"] = False
+        pub["action"] = s["action"]
+        out.append(pub)
+
+    return {"count": len(out), "is_premium": is_prem, "likes": out}
+
+
+@api.post("/users/boost")
+async def activate_boost(current=Depends(get_current_user)):
+    until = (now_utc() + timedelta(minutes=30)).isoformat()
+    await db.users.update_one({"user_id": current["user_id"]}, {"$set": {"boosted_until": until}})
+    return {"message": "Profiliniz 30 dakika boyunca öne çıkarıldı! ✨", "boosted_until": until}
+
+
+@api.post("/subscription/create-checkout-session")
+async def create_checkout_session(payload: CheckoutSessionIn, current=Depends(get_current_user)):
+    stripe_key = os.environ.get("STRIPE_SECRET_KEY", "")
+    if stripe_key and not stripe_key.startswith("mock_"):
+        try:
+            import stripe
+            stripe.api_key = stripe_key
+            session = stripe.checkout.Session.create(
+                payment_method_types=["card"],
+                line_items=[{
+                    "price_data": {
+                        "currency": "usd",
+                        "product_data": {"name": "VibePulse Premium (Aylık)"},
+                        "unit_amount": 999,
+                    },
+                    "quantity": 1,
+                }],
+                mode="subscription",
+                success_url="vibepulse://premium-success",
+                cancel_url="vibepulse://premium-cancel",
+                client_reference_id=current["user_id"],
+            )
+            return {"url": session.url, "session_id": session.id}
+        except Exception as e:
+            log.warning("Stripe call failed, returning demo session: %s", e)
+
+    await db.users.update_one(
+        {"user_id": current["user_id"]},
+        {"$set": {"is_premium": True, "premium_expires_at": (now_utc() + timedelta(days=30)).isoformat()}}
+    )
+    return {
+        "url": "https://vibepulse.app/premium-activated",
+        "message": "Demo Premium Paketi Aktif Edildi!",
+        "is_premium": True
+    }
+
+
+@api.post("/subscription/webhook")
+async def stripe_webhook(request: dict):
+    user_id = request.get("user_id") or request.get("data", {}).get("object", {}).get("client_reference_id")
+    if user_id:
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {"is_premium": True, "premium_expires_at": (now_utc() + timedelta(days=30)).isoformat()}}
+        )
+        return {"status": "success", "user_id": user_id}
+    return {"status": "ignored"}
+
+
+# --- Option B: Realtime WebSocket Chat ---
+@app.websocket("/api/ws/chat/{match_id}")
+async def websocket_chat(websocket: WebSocket, match_id: str, token: Optional[str] = Query(None)):
+    if not token:
+        await websocket.close(code=4001, reason="Missing token")
+        return
+
+    user_id = decode_token(token)
+    if not user_id or await is_token_revoked(token):
+        await websocket.close(code=4002, reason="Invalid or revoked token")
+        return
+
+    m = await db.matches.find_one({"match_id": match_id, "user_ids": user_id})
+    if not m:
+        await websocket.close(code=4003, reason="Match not found")
+        return
+
+    other_user_id = next((uid for uid in m["user_ids"] if uid != user_id), None)
+    await ws_manager.connect(match_id, websocket)
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+            text = (data.get("text") or "").strip()
+            if not text:
+                continue
+
+            safe, reason = await moderate_text(text, user_id)
+            if not safe:
+                await websocket.send_json({"error": f"Mesaj engellendi: {reason}"})
+                continue
+
+            doc = {
+                "message_id": new_id("msg"),
+                "match_id": match_id,
+                "from_user_id": user_id,
+                "to_user_id": other_user_id,
+                "text": text,
+                "read": False,
+                "created_at": now_utc().isoformat(),
+            }
+            await db.messages.insert_one(doc)
+            await db.matches.update_one({"match_id": match_id}, {"$set": {"last_message_at": doc["created_at"]}})
+            doc.pop("_id", None)
+
+            await ws_manager.broadcast(match_id, {"type": "new_message", "message": doc})
+
+    except WebSocketDisconnect:
+        ws_manager.disconnect(match_id, websocket)
+    except Exception as e:
+        log.warning("WebSocket chat error: %s", e)
+        ws_manager.disconnect(match_id, websocket)
 
 
 # ------------------------- boot -------------------------

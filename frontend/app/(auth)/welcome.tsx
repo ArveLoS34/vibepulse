@@ -43,6 +43,19 @@ export default function Welcome() {
               <Text style={styles.primaryText}>Hemen Katıl</Text>
             </LinearGradient>
           </Pressable>
+
+          <Pressable
+            onPress={() => {
+              // Trigger Expo WebBrowser Google Auth flow or navigate to login
+              router.push("/(auth)/login");
+            }}
+            testID="cta-google-login"
+            style={styles.googleBtn}
+          >
+            <Ionicons name="logo-google" size={20} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={styles.googleText}>Google ile Devam Et</Text>
+          </Pressable>
+
           <Pressable onPress={() => router.push("/(auth)/login")} testID="cta-login" style={styles.secondaryBtn}>
             <Text style={styles.secondaryText}>Giriş Yap</Text>
           </Pressable>
@@ -91,6 +104,17 @@ const styles = StyleSheet.create({
   actions: { gap: spacing.md, marginBottom: spacing.xl },
   primaryBtn: { paddingVertical: 16, alignItems: "center", borderRadius: radius.pill },
   primaryText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  googleBtn: {
+    paddingVertical: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  googleText: { color: "#fff", fontSize: 15, fontWeight: "700" },
   secondaryBtn: {
     paddingVertical: 16,
     alignItems: "center",

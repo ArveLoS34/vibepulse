@@ -64,6 +64,33 @@ export default function MeScreen() {
               <Text style={styles.vibeText}>✨ {user.vibe_status}</Text>
             </View>
           ) : null}
+
+          <TouchableOpacity
+            onPress={() => router.push("/premium")}
+            style={{ width: "100%", marginVertical: spacing.md }}
+            testID="me-premium-btn"
+          >
+            <LinearGradient
+              colors={[theme.rose, "#8B5CF6"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: radius.pill,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
+            >
+              <Ionicons name="star" size={18} color="#fff" />
+              <Text style={{ color: "#fff", fontWeight: "800", fontSize: 14 }}>
+                {user.is_premium ? "VibePulse Premium Aktif ✨" : "Premium'a Yükselt — Ayrıcalıkları Gör"}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
           {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
           {user.city ? (
             <Text style={styles.meta}>

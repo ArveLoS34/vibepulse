@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, FlatList, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -9,16 +9,22 @@ import { ComposeModal } from "@/src/components/ComposeModal";
 import { api } from "@/src/lib/api";
 import { theme, radius, spacing } from "@/src/lib/theme";
 
+const HASHTAGS = ["Tüm", "Yazılım", "Urfa", "Müzik", "Kahve", "Gece", "Sanat", "Eğlence"];
+
 export default function FeedScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [selectedTag, setSelectedTag] = useState<string>("Tüm");
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const res = await api<{ posts: Post[] }>("/posts/feed");
+      const url = selectedTag && selectedTag !== "Tüm"
+        ? `/posts/feed?tag=${encodeURIComponent(selectedTag)}`
+        : "/posts/feed";
+      const res = await api<{ posts: Post[] }>(url);
       setPosts(res.posts);
       setErr(null);
     } catch (e: any) {
@@ -27,7 +33,7 @@ export default function FeedScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [selectedTag]);
 
   useFocusEffect(
     useCallback(() => {
@@ -58,6 +64,29 @@ export default function FeedScreen() {
           </LinearGradient>
           <Text style={styles.brand}>VibePulse</Text>
         </View>
+
+        {/* B4: Hashtag Chip Bar */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.chipBar}
+          contentContainerStyle={{ gap: 8, paddingRight: spacing.md }}
+        >
+          {HASHTAGS.map((tag) => {
+            const active = selectedTag === tag;
+            return (
+              <TouchableOpacity
+                key={tag}
+                onPress={() => setSelectedTag(tag)}
+                style={[styles.chip, active && styles.chipActive]}
+              >
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                  {tag === "Tüm" ? "Tümü" : `#${tag}`}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {loading ? (
@@ -113,6 +142,21 @@ const styles = StyleSheet.create({
   brandRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   logo: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   brand: { color: theme.text, fontWeight: "800", fontSize: 18, letterSpacing: -0.3 },
+  chipBar: { marginTop: spacing.sm },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: theme.card,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  chipActive: {
+    backgroundColor: theme.rose,
+    borderColor: theme.rose,
+  },
+  chipText: { color: theme.textDim, fontSize: 13, fontWeight: "600" },
+  chipTextActive: { color: "#fff", fontWeight: "700" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   empty: { alignItems: "center", padding: spacing.xxl, marginTop: 60, gap: 8 },
   emptyTitle: { color: theme.text, fontSize: 18, fontWeight: "700", marginTop: spacing.md },
