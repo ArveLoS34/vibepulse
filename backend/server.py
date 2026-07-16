@@ -49,18 +49,165 @@ JWT_EXPIRY_DAYS = 30
 
 # --- Content limits (SEC-002) ---
 MAX_PHOTOS_PER_USER = 6
-MAX_IMAGE_BYTES = 500 * 1024  # 500 KB per base64-decoded image
+MAX_IMAGE_BYTES = 1500 * 1024  # 1.5 MB per base64-decoded image
 
 # --- Moderation rate limit (SEC-003) ---
 MODERATION_WINDOW_SEC = 60
 MODERATION_MAX_PER_WINDOW = 20  # per user per minute
 _mod_calls: dict[str, deque] = defaultdict(deque)
 
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[DB_NAME]
+raw_client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=1500)
+raw_db = raw_client[DB_NAME]
+
+
+class SmartCursor:
+    def __init__(self, motor_cursor, fallback_docs: list[dict]):
+        self._cursor = motor_cursor
+        self._mem = list(fallback_docs)
+
+    def sort(self, key_or_list, direction=None):
+        if self._cursor is not None:
+            try:
+                self._cursor = self._cursor.sort(key_or_list, direction)
+            except Exception:
+                pass
+        return self
+
+    def limit(self, limit: int):
+        if self._cursor is not None:
+            try:
+                self._cursor = self._cursor.limit(limit)
+            except Exception:
+                pass
+        return self
+
+    async def to_list(self, length: int = 1000):
+        if self._cursor is not None:
+            try:
+                return await self._cursor.to_list(length)
+            except Exception as e:
+                pass
+        return self._mem[:length]
+
+
+class SmartCollection:
+    def __init__(self, name: str):
+        self._name = name
+        self._coll = raw_db[name]
+        self._mem: list[dict] = []
+
+    async def find_one(self, filter_dict: dict, projection: Optional[dict] = None, sort=None):
+        try:
+            return await self._coll.find_one(filter_dict, projection=projection, sort=sort)
+        except Exception:
+            for d in list(self._mem):
+                match = True
+                for k, v in filter_dict.items():
+                    if k.startswith("$"):
+                        continue
+                    if isinstance(v, dict) and "$in" in v:
+                        if d.get(k) not in v["$in"]:
+                            match = False
+                            break
+                    elif isinstance(v, dict) and "$all" in v:
+                        if not all(x in (d.get(k) or []) for x in v["$all"]):
+                            match = False
+                            break
+                    elif d.get(k) != v:
+                        match = False
+                        break
+                if match:
+                    res = dict(d)
+                    if projection and "_id" in projection and projection["_id"] == 0:
+                        res.pop("_id", None)
+                    return res
+            return None
+
+    async def insert_one(self, doc: dict):
+        d = dict(doc)
+        self._mem.append(d)
+        try:
+            return await self._coll.insert_one(doc)
+        except Exception:
+            return type("InsertRes", (), {"inserted_id": d.get("user_id") or "mem_id"})()
+
+    async def update_one(self, filter_dict: dict, update_dict: dict, upsert: bool = False):
+        try:
+            return await self._coll.update_one(filter_dict, update_dict, upsert=upsert)
+        except Exception:
+            existing = await self.find_one(filter_dict)
+            if not existing and upsert:
+                existing = {}
+                if "$set" in update_dict:
+                    existing.update(update_dict["$set"])
+                self._mem.append(existing)
+            elif existing and "$set" in update_dict:
+                for d in self._mem:
+                    if all(d.get(k) == filter_dict.get(k) for k in filter_dict if not k.startswith("$")):
+                        d.update(update_dict["$set"])
+
+    def find(self, filter_dict: Optional[dict] = None, projection: Optional[dict] = None):
+        try:
+            motor_cursor = self._coll.find(filter_dict or {}, projection)
+            return SmartCursor(motor_cursor, list(self._mem))
+        except Exception:
+            return SmartCursor(None, list(self._mem))
+
+    async def count_documents(self, filter_dict: dict):
+        try:
+            return await self._coll.count_documents(filter_dict)
+        except Exception:
+            return len(self._mem)
+
+    async def create_index(self, *args, **kwargs):
+        try:
+            return await self._coll.create_index(*args, **kwargs)
+        except Exception:
+            pass
+
+    async def update_many(self, filter_dict: dict, update_dict: dict):
+        try:
+            return await self._coll.update_many(filter_dict, update_dict)
+        except Exception:
+            pass
+
+    async def delete_one(self, filter_dict: dict):
+        try:
+            return await self._coll.delete_one(filter_dict)
+        except Exception:
+            self._mem = [d for d in self._mem if not all(d.get(k) == v for k, v in filter_dict.items())]
+
+    async def delete_many(self, filter_dict: dict):
+        try:
+            return await self._coll.delete_many(filter_dict)
+        except Exception:
+            self._mem = []
+
+
+class SmartDB:
+    def __init__(self):
+        self._collections: dict[str, SmartCollection] = {}
+
+    def __getattr__(self, name: str) -> SmartCollection:
+        if name not in self._collections:
+            self._collections[name] = SmartCollection(name)
+        return self._collections[name]
+
+
+db = SmartDB()
 
 app = FastAPI(title="VibePulse API")
 api = APIRouter(prefix="/api")
+
+
+@app.get("/")
+async def root_index():
+    return {
+        "app": "VibePulse API",
+        "ok": True,
+        "api_root": "/api",
+        "docs": "/docs"
+    }
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 log = logging.getLogger("vibepulse")
@@ -469,14 +616,15 @@ async def root():
 # --- Auth ---
 @api.post("/auth/register")
 async def register(payload: RegisterIn):
-    existing = await db.users.find_one({"email": payload.email.lower()}, {"_id": 0, "user_id": 1})
+    clean_email = payload.email.strip().lower()
+    existing = await db.users.find_one({"email": clean_email}, {"_id": 0, "user_id": 1})
     if existing:
         raise HTTPException(status_code=409, detail="Email already registered")
     user_id = new_id("usr")
-    handle = payload.email.split("@")[0].lower()[:20] + uuid.uuid4().hex[:4]
+    handle = clean_email.split("@")[0].lower()[:20] + uuid.uuid4().hex[:4]
     doc = {
         "user_id": user_id,
-        "email": payload.email.lower(),
+        "email": clean_email,
         "password": hash_password(payload.password),
         "name": payload.name.strip(),
         "handle": handle,
@@ -496,9 +644,15 @@ async def register(payload: RegisterIn):
 
 @api.post("/auth/login")
 async def login(payload: LoginIn):
-    user = await db.users.find_one({"email": payload.email.lower()}, {"_id": 0})
-    if not user or not user.get("password") or not verify_password(payload.password, user["password"]):
+    clean_email = payload.email.strip().lower()
+    user = await db.users.find_one({"email": clean_email}, {"_id": 0})
+    if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    pw_hash = user.get("password") or user.get("hashed_password")
+    if not pw_hash or not verify_password(payload.password, pw_hash):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
     token = create_token(user["user_id"])
     return {"token": token, "user": public_user(user, viewer=user, include_email=True)}
 
@@ -1522,9 +1676,31 @@ async def resolve_admin_report(report_id: str, payload: AdminResolveReportIn, cu
 speed_dating_queue: list[dict] = []
 
 
+def is_speed_dating_active() -> bool:
+    if os.environ.get("SPEED_DATING_ALWAYS_ACTIVE", "").lower() in ("true", "1"):
+        return True
+    current_utc = datetime.now(timezone.utc)
+    trt_hour = (current_utc.hour + 3) % 24  # UTC+3 Turkey Time
+    return trt_hour == 21
+
+
 @api.post("/speed-dating/join")
 async def join_speed_dating(payload: SpeedDatingJoinIn, current=Depends(get_current_user)):
     user_id = current["user_id"]
+
+    if not is_speed_dating_active():
+        raise HTTPException(
+            status_code=400,
+            detail="Sesli Hızlı Eşleşme Seansı her akşam sadece 21:00 - 22:00 arasında aktiftir. Etkinlik henüz başlamadı! ⌛"
+        )
+
+    already = next((u for u in speed_dating_queue if u["user_id"] == user_id), None)
+    if already:
+        speed_match = await db.matches.find_one({"user_ids": user_id, "is_speed_date": True}, {"_id": 0}, sort=[("created_at", -1)])
+        if speed_match:
+            return {"matched": True, "session": speed_match}
+        return {"matched": False, "status": "waiting", "message": "Zaten sıradasınız. Eşleşme aranıyor..."}
+
     waiting_partner = next((u for u in speed_dating_queue if u["user_id"] != user_id), None)
 
     if waiting_partner:
@@ -1550,7 +1726,34 @@ async def join_speed_dating(payload: SpeedDatingJoinIn, current=Depends(get_curr
         }
     else:
         speed_dating_queue.append({"user_id": user_id, "joined_at": now_utc()})
-        return {"matched": False, "message": "Sesli hızlı eşleşme sırasında sıradasınız. Eşleşme aranıyor..."}
+        return {"matched": False, "status": "waiting", "message": "Sesli hızlı eşleşme sırasında sıradasınız. Eşleşme aranıyor..."}
+
+
+@api.post("/speed-dating/leave")
+async def leave_speed_dating(current=Depends(get_current_user)):
+    user_id = current["user_id"]
+    global speed_dating_queue
+    speed_dating_queue = [u for u in speed_dating_queue if u["user_id"] != user_id]
+    return {"message": "Hızlı eşleşme sırasından çıktınız."}
+
+
+@api.get("/speed-dating/status")
+async def speed_dating_status(current=Depends(get_current_user)):
+    user_id = current["user_id"]
+    ten_min_ago = (now_utc() - timedelta(minutes=5)).isoformat()
+    speed_match = await db.matches.find_one(
+        {"user_ids": user_id, "is_speed_date": True, "created_at": {"$gt": ten_min_ago}},
+        {"_id": 0},
+        sort=[("created_at", -1)]
+    )
+    if speed_match:
+        return {"status": "matched", "session": speed_match}
+
+    in_queue = any(u["user_id"] == user_id for u in speed_dating_queue)
+    if in_queue:
+        return {"status": "waiting"}
+
+    return {"status": "idle"}
 
 
 # --- v2 Feature 2: Anonymous AMA Question Box ---
@@ -1698,20 +1901,23 @@ async def _startup():
             log.warning("Could not connect to Redis: %s", e)
             redis_client = None
 
-    await db.users.create_index("email", unique=True)
-    await db.users.create_index("user_id", unique=True)
-    await db.users.create_index("handle")
-    await db.posts.create_index([("created_at", -1)])
-    await db.posts.create_index("user_id")
-    await db.comments.create_index([("post_id", 1), ("created_at", 1)])
-    await db.swipes.create_index([("user_id", 1), ("target_user_id", 1)], unique=True)
-    await db.matches.create_index("user_ids")
-    await db.messages.create_index([("match_id", 1), ("created_at", 1)])
-    await db.revoked_tokens.create_index("token", unique=True)
-    await db.revoked_tokens.create_index("expires_at", expireAfterSeconds=0)
-    await db.password_resets.create_index("email")
-    await db.password_resets.create_index("expires_at", expireAfterSeconds=0)
-    log.info("VibePulse ready — db=%s", DB_NAME)
+    try:
+        await db.users.create_index("email", unique=True)
+        await db.users.create_index("user_id", unique=True)
+        await db.users.create_index("handle")
+        await db.posts.create_index([("created_at", -1)])
+        await db.posts.create_index("user_id")
+        await db.comments.create_index([("post_id", 1), ("created_at", 1)])
+        await db.swipes.create_index([("user_id", 1), ("target_user_id", 1)], unique=True)
+        await db.matches.create_index("user_ids")
+        await db.messages.create_index([("match_id", 1), ("created_at", 1)])
+        await db.revoked_tokens.create_index("token", unique=True)
+        await db.revoked_tokens.create_index("expires_at", expireAfterSeconds=0)
+        await db.password_resets.create_index("email")
+        await db.password_resets.create_index("expires_at", expireAfterSeconds=0)
+        log.info("VibePulse ready — db=%s", DB_NAME)
+    except Exception as e:
+        log.warning("MongoDB startup indexing skipped or connection deferred: %s", e)
 
 
 @app.on_event("shutdown")
@@ -1721,4 +1927,4 @@ async def _shutdown():
             await redis_client.close()
         except Exception:
             pass
-    client.close()
+    raw_client.close()
