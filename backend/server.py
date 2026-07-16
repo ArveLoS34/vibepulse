@@ -233,6 +233,8 @@ def public_user(user: dict, viewer: Optional[dict] = None, include_email: bool =
         "created_at": user.get("created_at"),
         "is_premium": user.get("is_premium", False),
         "boosted_until": user.get("boosted_until"),
+        "streak_days": user.get("streak_days", 1),
+        "badges": user.get("badges", ["🌱 Yeni Vibe"]),
     }
     if include_email or is_self:
         out["email"] = user.get("email")
@@ -588,9 +590,81 @@ async def google_session(payload: GoogleSessionIn):
     return {"token": token, "user": public_user(user, viewer=user, include_email=True)}
 
 
+async def _update_streak(user: dict) -> dict:
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    yesterday_str = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    last_date = user.get("last_login_date", "")
+    streak = user.get("streak_days", 0)
+
+    if last_date == today_str:
+        pass
+    elif last_date == yesterday_str:
+        streak += 1
+    else:
+        streak = 1
+
+    badges = ["🌱 Yeni Vibe"]
+    if streak >= 3:
+        badges.append("🔥 3 Gün Serisi")
+    if streak >= 7:
+        badges.append("⚡ Vibe Efendisi")
+    if user.get("is_premium"):
+        badges.append("⭐ Premium")
+    if user.get("music_tags") or user.get("interests"):
+        badges.append("🎵 Müzik Sever")
+
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"streak_days": streak, "last_login_date": today_str, "badges": badges}}
+    )
+    user["streak_days"] = streak
+    user["last_login_date"] = today_str
+    user["badges"] = badges
+    return user
+
+
 @api.get("/auth/me")
 async def me(current=Depends(get_current_user)):
-    return {"user": public_user(current, viewer=current, include_email=True)}
+    updated_user = await _update_streak(current)
+    return {"user": public_user(updated_user, viewer=updated_user, include_email=True)}
+
+
+# --- Canlı Harita Modu (Vibe Map) ---
+@api.get("/map/vibes")
+async def get_map_vibes(current=Depends(get_current_user)):
+    signals = await db.signals.find({"expires_at": {"$gt": now_utc().isoformat()}}, {"_id": 0}).to_list(50)
+    users_with_loc = await db.users.find(
+        {"user_id": {"$ne": current["user_id"]}},
+        {"_id": 0, "password": 0}
+    ).limit(20).to_list(20)
+
+    pins = []
+    for s in signals:
+        pins.append({
+            "id": s["signal_id"],
+            "type": "signal",
+            "title": s["title"],
+            "category": s.get("category", "Etkinlik"),
+            "location_name": s.get("location_name", "Kadıköy"),
+            "author": s.get("author"),
+            "lat": 41.0082 + random.uniform(-0.03, 0.03),
+            "lng": 28.9784 + random.uniform(-0.03, 0.03),
+        })
+
+    for u in users_with_loc:
+        loc = u.get("location") or {"lat": 41.0082 + random.uniform(-0.02, 0.02), "lng": 28.9784 + random.uniform(-0.02, 0.02)}
+        pub = public_user(u, viewer=current)
+        pins.append({
+            "id": u["user_id"],
+            "type": "user",
+            "title": u.get("vibe_status") or u.get("name"),
+            "user": pub,
+            "lat": loc["lat"],
+            "lng": loc["lng"],
+        })
+
+    return {"map_pins": pins}
 
 
 @api.put("/users/me")

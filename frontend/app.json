@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "VibePulse",
-    "slug": "frontend",
+    "slug": "vibepulse",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -9,12 +9,13 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.pulseconnect.p5iexe",
+      "supportsTablet": false,
+      "bundleIdentifier": "app.vibepulse.mobile",
       "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "Upload profile photos to show your vibe",
-        "NSCameraUsageDescription": "Take a new photo for your profile",
-        "NSLocationWhenInUseUsageDescription": "Show nearby vibes and matches"
+        "NSPhotoLibraryUsageDescription": "Profil fotoğraflarınızı ve sohbet içi görsellerinizi yüklemek için erişim izni gereklidir.",
+        "NSCameraUsageDescription": "Anlık profil fotoğrafı çekmek için kamera izni gereklidir.",
+        "NSLocationWhenInUseUsageDescription": "Yakındaki Vibe kullanıcılarını ve buluşma sinyallerini göstermek için konum izni gereklidir.",
+        "NSMicrophoneUsageDescription": "15 saniyelik Voice Vibe ses kaydı göndermek için mikrofon izni gereklidir."
       }
     },
     "android": {
@@ -23,10 +24,14 @@
         "backgroundColor": "#0A0A0B"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.pulseconnect.p5iexe",
+      "package": "app.vibepulse.mobile",
       "permissions": [
         "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.ACCESS_COARSE_LOCATION"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.POST_NOTIFICATIONS"
       ]
     },
     "web": {
@@ -48,9 +53,11 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Upload profile photos to show your vibe"
+          "photosPermission": "Profil fotoğraflarınızı yüklemek için galerinizden seçim yapın."
         }
-      ]
+      ],
+      "expo-location",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true
