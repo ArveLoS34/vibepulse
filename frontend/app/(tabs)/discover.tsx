@@ -118,8 +118,15 @@ export default function DiscoverScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Keşfet</Text>
-        <Text style={styles.subtitle}>Vibe'ları oku · Ruh eşini seç</Text>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <View>
+            <Text style={styles.title}>Keşfet</Text>
+            <Text style={styles.subtitle}>Vibe'ları oku · Ruh eşini seç</Text>
+          </View>
+          <TouchableOpacity onPress={() => alert("Squads Modu: Çiftli eşleşme ve arkadaş grupları aktif! 👯")} style={styles.squadBtn} testID="squads-btn">
+            <Text style={styles.squadText}>👯 Squads</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.stage}>
@@ -295,6 +302,15 @@ function SwipeCard({ card, back }: { card: Card; back?: boolean }) {
 
 const styles = StyleSheet.create({
   header: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  squadBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(139,92,246,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(139,92,246,0.4)",
+  },
+  squadText: { color: "#8B5CF6", fontWeight: "700", fontSize: 12 },
   title: { color: theme.text, fontSize: 26, fontWeight: "900", letterSpacing: -0.5 },
   subtitle: { color: theme.textDim, marginTop: 4, fontSize: 13 },
   stage: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.lg },

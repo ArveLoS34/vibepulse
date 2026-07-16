@@ -3,7 +3,7 @@ import { ActivityIndicator, FlatList, RefreshControl, ScrollView, StyleSheet, Te
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { PostCard, Post } from "@/src/components/PostCard";
 import { ComposeModal } from "@/src/components/ComposeModal";
 import { Avatar } from "@/src/components/Avatar";
@@ -13,6 +13,7 @@ import { theme, radius, spacing } from "@/src/lib/theme";
 const HASHTAGS = ["Tüm", "Yazılım", "Urfa", "Müzik", "Kahve", "Gece", "Sanat", "Eğlence"];
 
 export default function FeedScreen() {
+  const router = useRouter();
   const [posts, setPosts] = useState<Post[]>([]);
   const [signals, setSignals] = useState<any[]>([]);
   const [stories, setStories] = useState<any[]>([]);
@@ -54,6 +55,22 @@ export default function FeedScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const joinSpeedDating = async () => {
+    try {
+      const res = await api<{ matched: boolean; session?: any; message?: string }>("/speed-dating/join", {
+        method: "POST",
+        body: JSON.stringify({ preferred_gender: "everyone" }),
+      });
+      if (res.matched && res.session) {
+        router.push({ pathname: "/chat/[matchId]", params: { matchId: res.session.match_id } });
+      } else {
+        alert(res.message || "Eşleşme sırasındasınız!");
+      }
+    } catch (e: any) {
+      alert(e?.message || "Sesli eşleşmeye katılınamadı");
+    }
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -121,6 +138,27 @@ export default function FeedScreen() {
             );
           })}
         </ScrollView>
+
+        {/* v2 Feature 1: Blind Speed Dating Event Banner */}
+        <TouchableOpacity
+          onPress={joinSpeedDating}
+          style={styles.speedDatingBanner}
+          testID="speed-dating-btn"
+        >
+          <LinearGradient
+            colors={["rgba(139,92,246,0.3)", "rgba(244,63,94,0.3)"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.speedDatingInner}
+          >
+            <Ionicons name="mic-circle" size={22} color="#F59E0B" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.speedTitle}>🎙️ 21:00 Sesli Hızlı Eşleşme</Text>
+              <Text style={styles.speedSub}>3 dakikalık anonim sesli aramaya katıl.</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#fff" />
+          </LinearGradient>
+        </TouchableOpacity>
 
         {/* Feature 3: Hangout Signals */}
         {signals.length > 0 && (
@@ -214,6 +252,19 @@ const styles = StyleSheet.create({
   },
   chipText: { color: theme.textDim, fontSize: 13, fontWeight: "600" },
   chipTextActive: { color: "#fff", fontWeight: "700" },
+  speedDatingBanner: { marginTop: spacing.sm, borderRadius: radius.md, overflow: "hidden" },
+  speedDatingInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.4)",
+    borderRadius: radius.md,
+  },
+  speedTitle: { color: "#F59E0B", fontSize: 13, fontWeight: "800" },
+  speedSub: { color: theme.textDim, fontSize: 11, marginTop: 1 },
   signalsSection: { marginTop: spacing.md },
   signalsTitle: { color: theme.rose, fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.8 },
   signalCard: {

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -13,9 +13,12 @@ import type { VibeUser } from "@/src/context/AuthContext";
 export default function PublicProfile() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const [user, setUser] = useState<(VibeUser & { top_post?: any }) | null>(null);
+  const [user, setUser] = useState<(VibeUser & { top_post?: any; now_playing?: any }) | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [askOpen, setAskOpen] = useState(false);
+  const [questionText, setQuestionText] = useState("");
+  const [askBusy, setAskBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -44,6 +47,24 @@ export default function PublicProfile() {
         router.back();
       }
     } catch {}
+  };
+
+  const sendAnonymousQuestion = async () => {
+    if (!questionText.trim() || !user) return;
+    setAskBusy(true);
+    try {
+      await api(`/users/${user.user_id}/ask-anonymous`, {
+        method: "POST",
+        body: JSON.stringify({ text: questionText.trim() }),
+      });
+      alert("Anonim sorunuz gönderildi! 🙈");
+      setQuestionText("");
+      setAskOpen(false);
+    } catch (e: any) {
+      alert(e?.message || "Soru gönderilemedi");
+    } finally {
+      setAskBusy(false);
+    }
   };
 
   const blockUser = async () => {
@@ -101,7 +122,24 @@ export default function PublicProfile() {
                 <Text style={styles.vibeText}>✨ {user.vibe_status}</Text>
               </View>
             ) : null}
+
+            {/* Feature 3: Live Spotify Widget */}
+            {user.now_playing ? (
+              <View style={styles.spotifyWidget}>
+                <Ionicons name="musical-note" size={16} color="#1DB954" />
+                <Text style={styles.spotifyText}>
+                  Şu an dinliyor: {user.now_playing.song_title} — {user.now_playing.artist_name}
+                </Text>
+              </View>
+            ) : null}
+
             {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
+
+            {/* Feature 2: Anonymous Question Button */}
+            <TouchableOpacity onPress={() => setAskOpen(!askOpen)} style={styles.askBtn} testID="ask-anonymous-btn">
+              <Ionicons name="eye-off-outline" size={16} color="#fff" />
+              <Text style={styles.askBtnText}>🙈 Anonim Soru Sor (AMA)</Text>
+            </TouchableOpacity>
             <View style={styles.metaRow}>
               {typeof user.distance_km === "number" ? (
                 <Text style={styles.meta}>
@@ -171,6 +209,32 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(244,63,94,0.12)", borderWidth: 1, borderColor: "rgba(244,63,94,0.3)",
   },
   vibeText: { color: theme.rose, fontWeight: "700", fontSize: 13 },
+  spotifyWidget: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(29, 185, 84, 0.15)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: "rgba(29, 185, 84, 0.3)",
+  },
+  spotifyText: { color: "#1DB954", fontSize: 12, fontWeight: "700" },
+  askBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: theme.card,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  askBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
   bio: { color: theme.text, textAlign: "center", marginTop: spacing.md, fontSize: 15, lineHeight: 22 },
   metaRow: { flexDirection: "row", gap: 12, marginTop: spacing.md },
   meta: { color: theme.textDim, fontSize: 13 },

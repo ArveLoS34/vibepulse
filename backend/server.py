@@ -235,6 +235,7 @@ def public_user(user: dict, viewer: Optional[dict] = None, include_email: bool =
         "boosted_until": user.get("boosted_until"),
         "streak_days": user.get("streak_days", 1),
         "badges": user.get("badges", ["🌱 Yeni Vibe"]),
+        "now_playing": user.get("now_playing"),
     }
     if include_email or is_self:
         out["email"] = user.get("email")
@@ -433,6 +434,30 @@ class QuizAnswersIn(BaseModel):
 
 class AdminResolveReportIn(BaseModel):
     action: Literal["dismiss", "delete_content", "ban_user"]
+
+
+class SpeedDatingJoinIn(BaseModel):
+    preferred_gender: Optional[str] = "everyone"
+
+
+class AskAnonymousIn(BaseModel):
+    text: str = Field(min_length=3, max_length=280)
+
+
+class AnswerQuestionIn(BaseModel):
+    answer_text: str = Field(min_length=1, max_length=280)
+    publish_to_feed: bool = True
+
+
+class SpotifyStatusIn(BaseModel):
+    song_title: str
+    artist_name: str
+    is_playing: bool = True
+
+
+class CreateSquadIn(BaseModel):
+    squad_name: str = Field(min_length=2, max_length=50)
+    partner_handle: str
 
 
 # ------------------------- routes -------------------------
@@ -1491,6 +1516,155 @@ async def resolve_admin_report(report_id: str, payload: AdminResolveReportIn, cu
 
     await db.reports.update_one({"report_id": report_id}, {"$set": {"status": f"resolved_{payload.action}"}})
     return {"message": f"Rapor işlem yapıldı: {payload.action}"}
+
+
+# --- v2 Feature 1: Blind Speed Dating Hour ---
+speed_dating_queue: list[dict] = []
+
+
+@api.post("/speed-dating/join")
+async def join_speed_dating(payload: SpeedDatingJoinIn, current=Depends(get_current_user)):
+    user_id = current["user_id"]
+    waiting_partner = next((u for u in speed_dating_queue if u["user_id"] != user_id), None)
+
+    if waiting_partner:
+        speed_dating_queue.remove(waiting_partner)
+        p_id = waiting_partner["user_id"]
+        partner = await db.users.find_one({"user_id": p_id}, {"_id": 0, "password": 0})
+
+        m_doc = {
+            "match_id": new_id("speed_mch"),
+            "user_ids": sorted([user_id, p_id]),
+            "is_speed_date": True,
+            "duration_sec": 180,
+            "created_at": now_utc().isoformat(),
+            "last_message_at": now_utc().isoformat(),
+        }
+        await db.matches.insert_one(m_doc)
+        m_doc.pop("_id", None)
+
+        return {
+            "matched": True,
+            "session": m_doc,
+            "partner": {"user_id": partner["user_id"], "name": "Anonim Vibe Partneri", "vibe_status": partner.get("vibe_status")}
+        }
+    else:
+        speed_dating_queue.append({"user_id": user_id, "joined_at": now_utc()})
+        return {"matched": False, "message": "Sesli hızlı eşleşme sırasında sıradasınız. Eşleşme aranıyor..."}
+
+
+# --- v2 Feature 2: Anonymous AMA Question Box ---
+@api.post("/users/{target_id}/ask-anonymous")
+async def ask_anonymous_question(target_id: str, payload: AskAnonymousIn, current=Depends(get_current_user)):
+    target = await db.users.find_one({"user_id": target_id}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+
+    safe, reason = await moderate_text(payload.text, current["user_id"])
+    if not safe:
+        raise HTTPException(status_code=400, detail=f"Soru reddedildi: {reason}")
+
+    doc = {
+        "question_id": new_id("ama"),
+        "target_user_id": target_id,
+        "asker_user_id": current["user_id"],
+        "question_text": payload.text,
+        "answer_text": None,
+        "answered_at": None,
+        "created_at": now_utc().isoformat(),
+    }
+    await db.questions.insert_one(doc)
+    doc.pop("_id", None)
+    return {"message": "Anonim sorunuz başarıyla iletildi! 🙈", "question": doc}
+
+
+@api.get("/users/me/questions")
+async def list_my_questions(current=Depends(get_current_user)):
+    questions = await db.questions.find(
+        {"target_user_id": current["user_id"]},
+        {"_id": 0, "asker_user_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return {"questions": questions}
+
+
+@api.post("/questions/{question_id}/answer")
+async def answer_question(question_id: str, payload: AnswerQuestionIn, current=Depends(get_current_user)):
+    q = await db.questions.find_one({"question_id": question_id, "target_user_id": current["user_id"]})
+    if not q:
+        raise HTTPException(status_code=404, detail="Soru bulunamadı")
+
+    safe, reason = await moderate_text(payload.answer_text, current["user_id"])
+    if not safe:
+        raise HTTPException(status_code=400, detail=f"Cevap reddedildi: {reason}")
+
+    now_iso = now_utc().isoformat()
+    await db.questions.update_one(
+        {"question_id": question_id},
+        {"$set": {"answer_text": payload.answer_text, "answered_at": now_iso}}
+    )
+
+    if payload.publish_to_feed:
+        post_doc = {
+            "post_id": new_id("post"),
+            "user_id": current["user_id"],
+            "text": f"🙈 Anonim Soru: \"{q['question_text']}\"\n\n💬 Cevabım: {payload.answer_text}",
+            "image": "",
+            "likes": [],
+            "likes_count": 0,
+            "comments_count": 0,
+            "created_at": now_iso,
+        }
+        await db.posts.insert_one(post_doc)
+
+    return {"message": "Sorunuz cevaplandı ve yayınlandı!"}
+
+
+# --- v2 Feature 3: Spotify Live Status ---
+@api.post("/users/me/spotify-status")
+async def update_spotify_status(payload: SpotifyStatusIn, current=Depends(get_current_user)):
+    status_doc = {
+        "song_title": payload.song_title,
+        "artist_name": payload.artist_name,
+        "is_playing": payload.is_playing,
+        "updated_at": now_utc().isoformat(),
+    }
+    await db.users.update_one(
+        {"user_id": current["user_id"]},
+        {"$set": {"now_playing": status_doc}}
+    )
+    return {"message": "Spotify dinleme durumu güncellendi! 🎵", "now_playing": status_doc}
+
+
+# --- v2 Feature 4: Squads / Double Date Mode ---
+@api.post("/squads")
+async def create_squad(payload: CreateSquadIn, current=Depends(get_current_user)):
+    clean_handle = payload.partner_handle.lstrip("@").lower().strip()
+    partner = await db.users.find_one({"handle": clean_handle}, {"_id": 0, "password": 0})
+    if not partner:
+        raise HTTPException(status_code=404, detail="Ortak kullanıcı bulunamadı")
+
+    squad_doc = {
+        "squad_id": new_id("sqd"),
+        "squad_name": payload.squad_name,
+        "member_ids": sorted([current["user_id"], partner["user_id"]]),
+        "members": [
+            public_user(current, viewer=current),
+            public_user(partner, viewer=current)
+        ],
+        "created_at": now_utc().isoformat(),
+    }
+    await db.squads.insert_one(squad_doc)
+    squad_doc.pop("_id", None)
+    return {"message": "Çiftli Squad grubunuz başarıyla oluşturuldu! 👯", "squad": squad_doc}
+
+
+@api.get("/squads")
+async def list_squads(current=Depends(get_current_user)):
+    squads = await db.squads.find(
+        {"member_ids": {"$ne": current["user_id"]}},
+        {"_id": 0}
+    ).limit(30).to_list(30)
+    return {"squads": squads}
 
 
 # ------------------------- boot -------------------------
