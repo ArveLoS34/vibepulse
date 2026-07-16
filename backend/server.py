@@ -15,6 +15,7 @@ import base64
 import logging
 import math
 import os
+import random
 import time
 import uuid
 from collections import defaultdict, deque
@@ -34,10 +35,13 @@ from starlette.middleware.cors import CORSMiddleware
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-MONGO_URL = os.environ["MONGO_URL"]
-DB_NAME = os.environ["DB_NAME"]
-JWT_SECRET = os.environ["JWT_SECRET"]
+MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
+DB_NAME = os.environ.get("DB_NAME", "vibepulse")
+JWT_SECRET = os.environ.get("JWT_SECRET", "vibepulse-secret-key-12345")
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
+REDIS_URL = os.environ.get("REDIS_URL", "")
+
+redis_client = None
 
 JWT_ALGO = "HS256"
 JWT_EXPIRY_DAYS = 30
@@ -98,10 +102,37 @@ def decode_token(token: str) -> Optional[str]:
         return None
 
 
+async def revoke_token(token: str) -> None:
+    await db.revoked_tokens.update_one(
+        {"token": token},
+        {"$set": {"token": token, "revoked_at": now_utc(), "expires_at": now_utc() + timedelta(days=JWT_EXPIRY_DAYS)}},
+        upsert=True,
+    )
+    if redis_client is not None:
+        try:
+            await redis_client.setex(f"revoked_token:{token}", JWT_EXPIRY_DAYS * 86400, "1")
+        except Exception as e:
+            log.warning("Redis setex failed: %s", e)
+
+
+async def is_token_revoked(token: str) -> bool:
+    if redis_client is not None:
+        try:
+            res = await redis_client.get(f"revoked_token:{token}")
+            if res:
+                return True
+        except Exception as e:
+            log.warning("Redis get failed: %s", e)
+    doc = await db.revoked_tokens.find_one({"token": token})
+    return doc is not None
+
+
 async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
     token = authorization.split(" ", 1)[1].strip()
+    if await is_token_revoked(token):
+        raise HTTPException(status_code=401, detail="Token iptal edildi (oturum kapatılmış)")
     user_id = decode_token(token)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
@@ -155,8 +186,18 @@ def public_user(user: dict, viewer: Optional[dict] = None, include_email: bool =
 
 
 # ------------------------ moderation ------------------------
-def _mod_rate_check(user_id: str) -> bool:
-    """SEC-003: return True if this user is within the moderation call budget."""
+async def _mod_rate_check(user_id: str) -> bool:
+    """SEC-003: return True if this user is within the moderation call budget. Uses Redis if available."""
+    if redis_client is not None:
+        try:
+            key = f"rate_limit:mod:{user_id}"
+            count = await redis_client.incr(key)
+            if count == 1:
+                await redis_client.expire(key, MODERATION_WINDOW_SEC)
+            return count <= MODERATION_MAX_PER_WINDOW
+        except Exception as e:
+            log.warning("Redis rate limit check failed, falling back to memory: %s", e)
+
     q = _mod_calls[user_id]
     now = time.time()
     cutoff = now - MODERATION_WINDOW_SEC
@@ -178,7 +219,7 @@ async def moderate_text(text: str, user_id: str) -> tuple[bool, str]:
         return True, ""
     if not EMERGENT_LLM_KEY:
         return True, ""
-    if not _mod_rate_check(user_id):
+    if not await _mod_rate_check(user_id):
         return False, "Rate limit: çok hızlı içerik gönderiyorsun. Biraz bekle."
     try:
         from emergentintegrations.llm.chat import LlmChat, UserMessage  # type: ignore
@@ -249,6 +290,16 @@ class RegisterIn(BaseModel):
 class LoginIn(BaseModel):
     email: EmailStr
     password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str = Field(min_length=6)
 
 
 class ProfileUpdate(BaseModel):
@@ -330,6 +381,73 @@ async def login(payload: LoginIn):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_token(user["user_id"])
     return {"token": token, "user": public_user(user, viewer=user, include_email=True)}
+
+
+@api.post("/auth/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest):
+    email = req.email.strip().lower()
+    user = await db.users.find_one({"email": email})
+    if not user:
+        return {"message": "Eğer e-posta sistemde kayıtlıysa sıfırlama kodu gönderildi", "demo_code": None}
+
+    code = f"{random.randint(100000, 999999)}"
+    expires_at = now_utc() + timedelta(minutes=15)
+
+    await db.password_resets.update_one(
+        {"email": email},
+        {
+            "$set": {
+                "email": email,
+                "code": code,
+                "expires_at": expires_at,
+                "used": False,
+                "created_at": now_utc(),
+            }
+        },
+        upsert=True,
+    )
+
+    log.info("Password reset code generated for %s: %s", email, code)
+    return {
+        "message": "Şifre sıfırlama kodu gönderildi",
+        "demo_code": code,
+    }
+
+
+@api.post("/auth/reset-password")
+async def reset_password(req: ResetPasswordRequest):
+    email = req.email.strip().lower()
+    reset_doc = await db.password_resets.find_one({
+        "email": email,
+        "code": req.code.strip(),
+        "used": False,
+    })
+
+    if not reset_doc:
+        raise HTTPException(status_code=400, detail="Geçersiz veya süresi dolmuş sıfırlama kodu")
+
+    expires_at = reset_doc.get("expires_at")
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if expires_at < now_utc():
+        raise HTTPException(status_code=400, detail="Sıfırlama kodunun süresi dolmuş")
+
+    hashed = hash_password(req.new_password)
+    await db.users.update_one({"email": email}, {"$set": {"password": hashed}})
+    await db.password_resets.update_one({"_id": reset_doc["_id"]}, {"$set": {"used": True}})
+
+    return {"message": "Şifreniz başarıyla güncellendi"}
+
+
+@api.post("/auth/logout")
+async def logout(authorization: Optional[str] = Header(None), user: dict = Depends(get_current_user)):
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+        await revoke_token(token)
+    return {"message": "Başarıyla çıkış yapıldı"}
 
 
 @api.post("/auth/google")
@@ -700,10 +818,16 @@ async def send_message(match_id: str, payload: MessageCreate, current=Depends(ge
 # ------------------------- boot -------------------------
 app.include_router(api)
 
+cors_origins_raw = os.environ.get("CORS_ORIGINS", "*").strip()
+if cors_origins_raw == "*":
+    allowed_origins = ["*"]
+else:
+    allowed_origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -711,6 +835,17 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def _startup():
+    global redis_client
+    if REDIS_URL:
+        try:
+            import redis.asyncio as aioredis
+            redis_client = aioredis.from_url(REDIS_URL, decode_responses=True)
+            await redis_client.ping()
+            log.info("Connected to Redis at %s", REDIS_URL)
+        except Exception as e:
+            log.warning("Could not connect to Redis: %s", e)
+            redis_client = None
+
     await db.users.create_index("email", unique=True)
     await db.users.create_index("user_id", unique=True)
     await db.users.create_index("handle")
@@ -720,11 +855,18 @@ async def _startup():
     await db.swipes.create_index([("user_id", 1), ("target_user_id", 1)], unique=True)
     await db.matches.create_index("user_ids")
     await db.messages.create_index([("match_id", 1), ("created_at", 1)])
+    await db.revoked_tokens.create_index("token", unique=True)
+    await db.revoked_tokens.create_index("expires_at", expireAfterSeconds=0)
+    await db.password_resets.create_index("email")
+    await db.password_resets.create_index("expires_at", expireAfterSeconds=0)
     log.info("VibePulse ready — db=%s", DB_NAME)
 
 
 @app.on_event("shutdown")
 async def _shutdown():
-    client.close()
-
+    if redis_client is not None:
+        try:
+            await redis_client.close()
+        except Exception:
+            pass
     client.close()

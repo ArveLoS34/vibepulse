@@ -93,8 +93,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    await clearToken();
-    setUser(null);
+    try {
+      await api("/auth/logout", { method: "POST" });
+    } catch {
+      // Ignore network errors on logout
+    } finally {
+      await clearToken();
+      setUser(null);
+    }
   };
 
   const value = useMemo<Ctx>(

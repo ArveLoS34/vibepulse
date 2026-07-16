@@ -81,6 +81,14 @@ export default function Login() {
             />
           </View>
 
+          <TouchableOpacity
+            onPress={() => router.push("/(auth)/forgot-password")}
+            style={{ alignSelf: "flex-end", marginBottom: spacing.md }}
+            testID="forgot-password-link"
+          >
+            <Text style={styles.forgotText}>Şifremi Unuttum?</Text>
+          </TouchableOpacity>
+
           {err ? <Text style={styles.err}>{err}</Text> : null}
 
           <TouchableOpacity onPress={submit} disabled={busy} testID="login-submit" style={{ marginTop: spacing.lg }}>
@@ -123,6 +131,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   err: { color: theme.danger, marginTop: spacing.sm },
+  forgotText: { color: theme.rose, fontSize: 13, fontWeight: "600" },
   primaryBtn: { paddingVertical: 16, alignItems: "center", borderRadius: radius.pill },
   primaryText: { color: "#fff", fontSize: 16, fontWeight: "800" },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: spacing.xl },
