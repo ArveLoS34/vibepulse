@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, FlatList, Image, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -8,12 +8,14 @@ import { PostCard, Post } from "@/src/components/PostCard";
 import { ComposeModal } from "@/src/components/ComposeModal";
 import { Avatar } from "@/src/components/Avatar";
 import { api } from "@/src/lib/api";
+import { useAuth } from "@/src/context/AuthContext";
 import { theme, radius, spacing } from "@/src/lib/theme";
 
 const HASHTAGS = ["Tüm", "Yazılım", "Urfa", "Müzik", "Kahve", "Gece", "Sanat", "Eğlence"];
 
 export default function FeedScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [signals, setSignals] = useState<any[]>([]);
   const [stories, setStories] = useState<any[]>([]);
@@ -22,6 +24,13 @@ export default function FeedScreen() {
   const [composeOpen, setComposeOpen] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string>("Tüm");
   const [err, setErr] = useState<string | null>(null);
+
+  // Story state
+  const [addStoryOpen, setAddStoryOpen] = useState(false);
+  const [storyText, setStoryText] = useState("");
+  const [storyBusy, setStoryBusy] = useState(false);
+  const [activeStoryGroup, setActiveStoryGroup] = useState<any | null>(null);
+  const [activeStoryIdx, setActiveStoryIdx] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -132,6 +141,30 @@ export default function FeedScreen() {
     };
   }, [speedModalOpen, speedStatus]);
 
+  const postStory = async () => {
+    if (!storyText.trim()) return;
+    setStoryBusy(true);
+    try {
+      await api("/stories", {
+        method: "POST",
+        body: JSON.stringify({ text: storyText.trim() }),
+      });
+      alert("24 Saatlik Vibe Hikayeniz paylaşıldı! 🌟");
+      setStoryText("");
+      setAddStoryOpen(false);
+      load();
+    } catch (e: any) {
+      alert(e?.message || "Hikaye paylaşılamadı");
+    } finally {
+      setStoryBusy(false);
+    }
+  };
+
+  const openStoryViewer = (group: any) => {
+    setActiveStoryGroup(group);
+    setActiveStoryIdx(0);
+  };
+
   const onRefresh = () => {
     setRefreshing(true);
     load();
@@ -147,7 +180,7 @@ export default function FeedScreen() {
             end={{ x: 1, y: 1 }}
             style={styles.logo}
           >
-            <Ionicons name="flash" size={16} color="#fff" />
+            <Text style={{ color: "#fff", fontSize: 18, fontWeight: "900", fontStyle: "italic" }}>V</Text>
           </LinearGradient>
           <Text style={styles.brand}>VibePulse</Text>
         </View>
@@ -157,10 +190,22 @@ export default function FeedScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           style={{ marginTop: spacing.sm }}
-          contentContainerStyle={{ gap: 14, paddingRight: spacing.md }}
+          contentContainerStyle={{ gap: 14, paddingRight: spacing.md, alignItems: "center" }}
         >
+          {/* Add My Story Ring */}
+          <TouchableOpacity onPress={() => setAddStoryOpen(true)} style={styles.storyWrap}>
+            <View style={styles.addStoryRing}>
+              <Avatar uri={user?.photos?.[0]} name={user?.name || ""} size={48} />
+              <View style={styles.plusBadge}>
+                <Ionicons name="add" size={14} color="#fff" />
+              </View>
+            </View>
+            <Text style={styles.storyName} numberOfLines={1}>Hikayen</Text>
+          </TouchableOpacity>
+
+          {/* User Stories */}
           {stories.map((st, i) => (
-            <View key={i} style={styles.storyWrap}>
+            <TouchableOpacity key={i} onPress={() => openStoryViewer(st)} style={styles.storyWrap}>
               <LinearGradient
                 colors={[theme.rose, "#8B5CF6"]}
                 style={styles.storyRing}
@@ -172,7 +217,7 @@ export default function FeedScreen() {
               <Text style={styles.storyName} numberOfLines={1}>
                 {st.user?.name?.split(" ")[0] || "Vibe"}
               </Text>
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
 
@@ -280,6 +325,116 @@ export default function FeedScreen() {
 
       <ComposeModal visible={composeOpen} onClose={() => setComposeOpen(false)} onPosted={load} />
 
+      {/* Add Story Modal */}
+      <Modal visible={addStoryOpen} animationType="slide" onRequestClose={() => setAddStoryOpen(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>✨ 24 Saatlik Vibe Hikayesi Paylaş</Text>
+            <TouchableOpacity onPress={() => setAddStoryOpen(false)} style={{ padding: 6 }}>
+              <Ionicons name="close" size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ padding: spacing.xl, gap: spacing.md, flex: 1 }}>
+            <TextInput
+              value={storyText}
+              onChangeText={setStoryText}
+              placeholder="Hikayende ne paylaşmak istersin? (24 saat sonra kaybolur)..."
+              placeholderTextColor={theme.textMuted}
+              multiline
+              maxLength={280}
+              style={styles.storyInput}
+              autoFocus
+            />
+
+            <TouchableOpacity
+              onPress={postStory}
+              disabled={storyBusy || !storyText.trim()}
+              style={{ marginTop: "auto", borderRadius: radius.pill, overflow: "hidden" }}
+            >
+              <LinearGradient
+                colors={[theme.rose, "#8B5CF6"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ paddingVertical: 16, alignItems: "center" }}
+              >
+                <Text style={{ color: "#fff", fontWeight: "800", fontSize: 16 }}>
+                  {storyBusy ? "Paylaşılıyor..." : "Hikayemde Paylaş 🚀"}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Full Screen Story Viewer Modal */}
+      <Modal visible={!!activeStoryGroup} animationType="fade" onRequestClose={() => setActiveStoryGroup(null)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#0A0A0C", justifyContent: "space-between" }}>
+          {activeStoryGroup && (
+            <>
+              {/* Progress bar */}
+              <View style={styles.storyBarRow}>
+                {activeStoryGroup.stories.map((st: any, idx: number) => (
+                  <View key={idx} style={[styles.storyBar, idx <= activeStoryIdx ? { backgroundColor: theme.rose } : null]} />
+                ))}
+              </View>
+
+              {/* Author Header */}
+              <View style={styles.storyAuthorRow}>
+                <Avatar uri={activeStoryGroup.user?.avatar} name={activeStoryGroup.user?.name || ""} size={42} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={{ color: "#fff", fontWeight: "800", fontSize: 15 }}>{activeStoryGroup.user?.name}</Text>
+                  <Text style={{ color: theme.textDim, fontSize: 12 }}>@{activeStoryGroup.user?.handle}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setActiveStoryGroup(null)} style={{ padding: 6 }}>
+                  <Ionicons name="close" size={26} color="#fff" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Story Content Card */}
+              <View style={styles.storyBody}>
+                <LinearGradient
+                  colors={["rgba(244,63,94,0.15)", "rgba(139,92,246,0.25)"]}
+                  style={styles.storyCard}
+                >
+                  <Text style={styles.storyCardText}>
+                    "{activeStoryGroup.stories[activeStoryIdx]?.text || "Vibe Hikayesi"}"
+                  </Text>
+                </LinearGradient>
+              </View>
+
+              {/* Footer navigation */}
+              <View style={styles.storyFooter}>
+                <TouchableOpacity
+                  disabled={activeStoryIdx === 0}
+                  onPress={() => setActiveStoryIdx((i) => i - 1)}
+                  style={[styles.storyNavBtn, activeStoryIdx === 0 && { opacity: 0.3 }]}
+                >
+                  <Ionicons name="chevron-back" size={24} color="#fff" />
+                  <Text style={{ color: "#fff", fontWeight: "700" }}>Önceki</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    if (activeStoryIdx < activeStoryGroup.stories.length - 1) {
+                      setActiveStoryIdx((i) => i + 1);
+                    } else {
+                      setActiveStoryGroup(null);
+                    }
+                  }}
+                  style={styles.storyNavBtn}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "700" }}>
+                    {activeStoryIdx < activeStoryGroup.stories.length - 1 ? "Sonraki" : "Kapat"}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={24} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </SafeAreaView>
+      </Modal>
+
       {/* v2 Feature 1: Speed Dating Radar / Lobi Modal */}
       <Modal visible={speedModalOpen} animationType="fade" transparent onRequestClose={leaveSpeedDating}>
         <View style={styles.speedBackdrop}>
@@ -323,9 +478,23 @@ const styles = StyleSheet.create({
   brandRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   logo: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   brand: { color: theme.text, fontWeight: "800", fontSize: 18, letterSpacing: -0.3 },
-  storyWrap: { alignItems: "center", width: 56 },
+  storyWrap: { alignItems: "center", width: 58 },
   storyRing: { padding: 2, borderRadius: 28 },
-  storyName: { color: theme.textDim, fontSize: 11, fontWeight: "600", marginTop: 4 },
+  addStoryRing: { position: "relative" },
+  plusBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    backgroundColor: theme.rose,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: theme.bg,
+  },
+  storyName: { color: theme.textDim, fontSize: 11, fontWeight: "600", marginTop: 4, textAlign: "center" },
   chipBar: { marginTop: spacing.sm },
   chip: {
     paddingHorizontal: 14,
@@ -385,6 +554,42 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 12,
   },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  modalTitle: { color: theme.text, fontSize: 18, fontWeight: "800" },
+  storyInput: {
+    backgroundColor: theme.card,
+    color: theme.text,
+    padding: 16,
+    borderRadius: radius.lg,
+    fontSize: 18,
+    minHeight: 180,
+    textAlignVertical: "top",
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  storyBarRow: { flexDirection: "row", gap: 4, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  storyBar: { flex: 1, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.2)" },
+  storyAuthorRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  storyBody: { flex: 1, justifyContent: "center", padding: spacing.xl },
+  storyCard: {
+    padding: spacing.xxl,
+    borderRadius: radius.xl,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(244,63,94,0.4)",
+    minHeight: 280,
+  },
+  storyCardText: { color: "#fff", fontSize: 22, fontWeight: "800", textAlign: "center", lineHeight: 32 },
+  storyFooter: { flexDirection: "row", justifyContent: "space-between", padding: spacing.lg },
+  storyNavBtn: { flexDirection: "row", alignItems: "center", gap: 6, padding: 10 },
   speedBackdrop: {
     flex: 1,
     backgroundColor: "rgba(10,10,11,0.9)",
