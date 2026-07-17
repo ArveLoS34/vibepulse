@@ -697,7 +697,7 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     alignItems: "center",
-    justify.content: "center",
+    justifyContent: "center",
     shadowColor: theme.rose,
     shadowOpacity: 0.5,
     shadowRadius: 20,
