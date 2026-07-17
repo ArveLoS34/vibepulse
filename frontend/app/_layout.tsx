@@ -8,6 +8,7 @@ import { StatusBar } from "expo-status-bar";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { AuthProvider } from "@/src/context/AuthContext";
+import { LanguageProvider } from "@/src/i18n/LanguageContext";
 import { useLocation } from "@/src/hooks/useLocation";
 import { useNotifications } from "@/src/hooks/useNotifications";
 import { theme } from "@/src/lib/theme";
@@ -45,13 +46,15 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.bg }}>
       <SafeAreaProvider>
-        <AuthProvider>
-          <ServicesInitializer />
-          <View style={{ flex: 1, backgroundColor: theme.bg }}>
-            <StatusBar style="light" />
-            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.bg } }} />
-          </View>
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <ServicesInitializer />
+            <View style={{ flex: 1, backgroundColor: theme.bg }}>
+              <StatusBar style="light" />
+              <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.bg } }} />
+            </View>
+          </AuthProvider>
+        </LanguageProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

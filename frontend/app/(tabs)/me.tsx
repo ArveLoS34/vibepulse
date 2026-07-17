@@ -5,6 +5,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "@/src/context/AuthContext";
+import { useTranslation } from "@/src/i18n/LanguageContext";
+import { LanguageSelectorModal } from "@/src/components/LanguageSelectorModal";
 import { api } from "@/src/lib/api";
 import type { Post } from "@/src/components/PostCard";
 import { PostCard } from "@/src/components/PostCard";
@@ -13,10 +15,12 @@ import { Avatar } from "@/src/components/Avatar";
 
 export default function MeScreen() {
   const router = useRouter();
-  const { user, logout, deleteAccount } = useAuth();
+  const { user, refresh, logout, deleteAccount } = useAuth();
+  const { t } = useTranslation();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [questionsModalOpen, setQuestionsModalOpen] = useState(false);
+  const [langModalOpen, setLangModalOpen] = useState(false);
   const [myQuestions, setMyQuestions] = useState<any[]>([]);
   const [replyText, setReplyText] = useState("");
   const [selectedQId, setSelectedQId] = useState<string | null>(null);
@@ -37,6 +41,42 @@ export default function MeScreen() {
       setMyQuestions(res.questions || []);
       setQuestionsModalOpen(true);
     } catch {}
+  };
+
+  const [adminModalOpen, setAdminModalOpen] = useState(false);
+  const [targetEmail, setTargetEmail] = useState("");
+  const [adminStatsData, setAdminStatsData] = useState<any>(null);
+  const [promoteBusy, setPromoteBusy] = useState(false);
+
+  const openAdminConsole = async () => {
+    try {
+      const res = await api<{ stats: any }>("/admin/stats");
+      setAdminStatsData(res.stats);
+      setAdminModalOpen(true);
+    } catch {
+      alert("Yönetici istatistikleri yüklenemedi");
+    }
+  };
+
+  const handlePromoteUser = async () => {
+    if (!targetEmail.trim()) return alert("Lütfen kullanıcı e-postası girin");
+    setPromoteBusy(true);
+    try {
+      const res = await api<{ message: string }>("/admin/promote-user", {
+        method: "POST",
+        body: JSON.stringify({
+          target_email: targetEmail.trim().toLowerCase(),
+          make_admin: true,
+          make_premium: true,
+        }),
+      });
+      alert(res.message);
+      setTargetEmail("");
+    } catch (e: any) {
+      alert(e?.message || "Yetki tanımlanamadı");
+    } finally {
+      setPromoteBusy(false);
+    }
   };
 
   const answerQuestion = async (qId: string) => {
@@ -65,6 +105,13 @@ export default function MeScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={["top"]}>
       <View style={styles.headerBar}>
+        <TouchableOpacity
+          testID="lang-select-btn"
+          style={styles.iconBtn}
+          onPress={() => setLangModalOpen(true)}
+        >
+          <Ionicons name="globe-outline" size={20} color={theme.text} />
+        </TouchableOpacity>
         <TouchableOpacity
           testID="edit-profile-btn"
           style={styles.iconBtn}
@@ -129,6 +176,14 @@ export default function MeScreen() {
             <Ionicons name="eye-off" size={18} color="#8B5CF6" />
             <Text style={styles.amaBoxText}>🙈 Gelen Anonim Sorular (AMA)</Text>
           </TouchableOpacity>
+
+          {/* Admin Console Button (Only visible if user.is_admin is true) */}
+          {user.is_admin ? (
+            <TouchableOpacity onPress={openAdminConsole} style={styles.adminActiveBadge} testID="open-admin-console">
+              <Ionicons name="shield-checkmark" size={18} color="#10B981" />
+              <Text style={styles.adminActiveText}>👑 Yönetici Konsolu — Kullanıcı Yetkilendir</Text>
+            </TouchableOpacity>
+          ) : null}
 
           {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
           {user.city ? (
@@ -247,6 +302,69 @@ export default function MeScreen() {
           />
         </SafeAreaView>
       </Modal>
+
+      {/* Admin Management Console Modal */}
+      <Modal visible={adminModalOpen} animationType="slide" onRequestClose={() => setAdminModalOpen(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>👑 Yönetici & Yetkilendirme Konsolu</Text>
+            <TouchableOpacity onPress={() => setAdminModalOpen(false)} style={{ padding: 6 }}>
+              <Ionicons name="close" size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}>
+            {adminStatsData && (
+              <View style={styles.statsGrid}>
+                <View style={styles.statCard}>
+                  <Text style={styles.statVal}>{adminStatsData.total_users}</Text>
+                  <Text style={styles.statLbl}>Kullanıcı</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statVal}>{adminStatsData.total_posts}</Text>
+                  <Text style={styles.statLbl}>Gönderi</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statVal}>{adminStatsData.premium_users}</Text>
+                  <Text style={styles.statLbl}>VIP Üye</Text>
+                </View>
+              </View>
+            )}
+
+            <View style={styles.promoteBox}>
+              <Text style={styles.promoteTitle}>👑 Bir Üyeye VIP / Admin Yetkisi Ver</Text>
+              <Text style={styles.promoteSub}>Yetki vermek istediğin kullanıcının kayıtlı e-posta adresini gir:</Text>
+              <TextInput
+                value={targetEmail}
+                onChangeText={setTargetEmail}
+                placeholder="kullanici@email.com"
+                placeholderTextColor={theme.textMuted}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                style={styles.promoteInput}
+              />
+              <TouchableOpacity
+                onPress={handlePromoteUser}
+                disabled={promoteBusy || !targetEmail.trim()}
+                style={[styles.promoteSubmitBtn, (promoteBusy || !targetEmail.trim()) ? { opacity: 0.5 } : null]}
+              >
+                <LinearGradient
+                  colors={[theme.rose, "#8B5CF6"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{ paddingVertical: 12, alignItems: "center", borderRadius: radius.pill }}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "800" }}>
+                    {promoteBusy ? "Yetki Tanımlanıyor..." : "Kullanıcıya Tam Yetki Ver 👑"}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      <LanguageSelectorModal visible={langModalOpen} onClose={() => setLangModalOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -298,6 +416,67 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   amaBoxText: { color: "#8B5CF6", fontWeight: "700", fontSize: 14 },
+  adminGrantBtn: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.4)",
+    marginBottom: spacing.md,
+  },
+  adminGrantText: { color: "#F59E0B", fontWeight: "800", fontSize: 13 },
+  adminActiveBadge: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(16, 185, 129, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(16, 185, 129, 0.4)",
+    marginBottom: spacing.md,
+  },
+  adminActiveText: { color: "#10B981", fontWeight: "800", fontSize: 13 },
+  statsGrid: { flexDirection: "row", gap: 10 },
+  statCard: {
+    flex: 1,
+    backgroundColor: theme.card,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  statVal: { color: theme.rose, fontSize: 22, fontWeight: "900" },
+  statLbl: { color: theme.textDim, fontSize: 11, fontWeight: "600", marginTop: 2 },
+  promoteBox: {
+    backgroundColor: theme.card,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.4)",
+    gap: 10,
+  },
+  promoteTitle: { color: "#F59E0B", fontSize: 16, fontWeight: "800" },
+  promoteSub: { color: theme.textDim, fontSize: 13, lineHeight: 18 },
+  promoteInput: {
+    backgroundColor: theme.surface,
+    color: theme.text,
+    borderRadius: radius.md,
+    padding: 12,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: theme.border,
+    marginTop: 4,
+  },
+  promoteSubmitBtn: { marginTop: 6 },
   modalHeader: {
     flexDirection: "row",
     alignItems: "center",

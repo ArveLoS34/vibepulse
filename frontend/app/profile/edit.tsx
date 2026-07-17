@@ -18,18 +18,28 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { useAuth } from "@/src/context/AuthContext";
+import { useTranslation } from "@/src/i18n/LanguageContext";
 import { theme, radius, spacing } from "@/src/lib/theme";
 
 export default function EditProfile() {
   const router = useRouter();
   const { user, updateProfile } = useAuth();
+  const { t } = useTranslation();
   const [name, setName] = useState(user?.name || "");
   const [bio, setBio] = useState(user?.bio || "");
   const [vibeStatus, setVibeStatus] = useState(user?.vibe_status || "");
   const [city, setCity] = useState(user?.city || "");
+  const [selectedTheme, setSelectedTheme] = useState<string>(user?.theme_id || "rose_purple");
   const [photos, setPhotos] = useState<string[]>(user?.photos || []);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const THEMES = [
+    { id: "rose_purple", key: "theme_rose_purple" as const, colors: ["#F43F5E", "#8B5CF6"] },
+    { id: "cyberpunk_gold", key: "theme_cyber_gold" as const, colors: ["#F59E0B", "#EF4444"] },
+    { id: "sakura_blossom", key: "theme_sakura" as const, colors: ["#EC4899", "#F43F5E"] },
+    { id: "midnight_emerald", key: "theme_emerald" as const, colors: ["#10B981", "#06B6D4"] },
+  ];
 
   const pickImage = async () => {
     if (photos.length >= 6) return;
@@ -53,7 +63,7 @@ export default function EditProfile() {
     setBusy(true);
     setErr(null);
     try {
-      await updateProfile({ name, bio, vibe_status: vibeStatus, city, photos });
+      await updateProfile({ name, bio, vibe_status: vibeStatus, city, photos, theme_id: selectedTheme });
       router.back();
     } catch (e: any) {
       setErr(e?.message || "Kaydedilemedi");
@@ -130,6 +140,28 @@ export default function EditProfile() {
             placeholderTextColor={theme.textMuted}
           />
 
+          <Text style={styles.label}>{t("profile_theme_title")}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, marginTop: 4 }}>
+            {THEMES.map((th) => {
+              const active = selectedTheme === th.id;
+              return (
+                <TouchableOpacity
+                  key={th.id}
+                  onPress={() => setSelectedTheme(th.id)}
+                  style={[styles.themeChip, active && styles.themeChipActive]}
+                >
+                  <LinearGradient
+                    colors={th.colors as [string, string]}
+                    style={{ width: 20, height: 20, borderRadius: 10 }}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  />
+                  <Text style={[styles.themeChipText, active && styles.themeChipTextActive]}>{t(th.key)}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
           <Text style={styles.label}>Şehir</Text>
           <TextInput testID="edit-city" value={city} onChangeText={setCity} style={styles.input} placeholderTextColor={theme.textMuted} />
 
@@ -164,6 +196,20 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
     fontSize: 15,
   },
+  themeChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    backgroundColor: theme.card,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  themeChipActive: { borderColor: theme.rose, backgroundColor: "rgba(244,63,94,0.12)" },
+  themeChipText: { color: theme.textDim, fontSize: 13, fontWeight: "600" },
+  themeChipTextActive: { color: "#fff", fontWeight: "800" },
   photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: spacing.sm },
   photoSlot: {
     width: "31%",

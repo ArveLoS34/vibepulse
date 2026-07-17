@@ -1,31 +1,39 @@
-import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useState } from "react";
+import { Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { theme, radius, spacing } from "@/src/lib/theme";
+import { useTranslation } from "@/src/i18n/LanguageContext";
+import { LanguageSelectorModal } from "@/src/components/LanguageSelectorModal";
 
 export default function Welcome() {
   const router = useRouter();
+  const { t } = useTranslation();
+  const [langOpen, setLangOpen] = useState(false);
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={["top", "bottom"]}>
       <View style={styles.wrap}>
         <View style={styles.orb} />
         <View style={styles.orb2} />
         <View style={styles.header}>
-          <LinearGradient colors={[theme.rose, "#8B5CF6"]} style={styles.logo} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-            <Ionicons name="flash" size={32} color="#fff" />
-          </LinearGradient>
+          <View style={styles.topRow}>
+            <LinearGradient colors={[theme.rose, "#8B5CF6"]} style={styles.logo} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+              <Ionicons name="flash" size={32} color="#fff" />
+            </LinearGradient>
+            <TouchableOpacity onPress={() => setLangOpen(true)} style={styles.langBtn} testID="welcome-lang-btn">
+              <Ionicons name="globe-outline" size={20} color={theme.text} />
+            </TouchableOpacity>
+          </View>
           <Text style={styles.brand}>VibePulse</Text>
-          <Text style={styles.tagline}>Sadece görünüş değil. Zeka. Mizah. Vibe.</Text>
+          <Text style={styles.tagline}>{t("tagline")}</Text>
         </View>
 
         <View style={styles.copy}>
-          <Text style={styles.h1}>Düşünceleriyle{"\n"}Aşık Ol.</Text>
-          <Text style={styles.p}>
-            Klasik flört uygulamalarını unut. Burada insanların düşüncelerine, esprilerine ve müziklerine göre eşleşirsin.
-          </Text>
+          <Text style={styles.h1}>{t("welcome_title")}</Text>
+          <Text style={styles.p}>{t("welcome_sub")}</Text>
         </View>
 
         <View style={styles.actions}>
@@ -40,27 +48,26 @@ export default function Welcome() {
               end={{ x: 1, y: 1 }}
               style={styles.primaryBtn}
             >
-              <Text style={styles.primaryText}>Hemen Katıl</Text>
+              <Text style={styles.primaryText}>{t("welcome_join")}</Text>
             </LinearGradient>
           </Pressable>
 
           <Pressable
-            onPress={() => {
-              // Trigger Expo WebBrowser Google Auth flow or navigate to login
-              router.push("/(auth)/login");
-            }}
+            onPress={() => router.push("/(auth)/login")}
             testID="cta-google-login"
             style={styles.googleBtn}
           >
             <Ionicons name="logo-google" size={20} color="#fff" style={{ marginRight: 8 }} />
-            <Text style={styles.googleText}>Google ile Devam Et</Text>
+            <Text style={styles.googleText}>{t("welcome_google")}</Text>
           </Pressable>
 
           <Pressable onPress={() => router.push("/(auth)/login")} testID="cta-login" style={styles.secondaryBtn}>
-            <Text style={styles.secondaryText}>Giriş Yap</Text>
+            <Text style={styles.secondaryText}>{t("welcome_login")}</Text>
           </Pressable>
         </View>
       </View>
+
+      <LanguageSelectorModal visible={langOpen} onClose={() => setLangOpen(false)} />
     </SafeAreaView>
   );
 }
@@ -88,6 +95,17 @@ const styles = StyleSheet.create({
     opacity: 0.18,
   },
   header: { alignItems: "flex-start", marginTop: spacing.xl },
+  topRow: { width: "100%", flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  langBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.card,
+    borderWidth: 1,
+    borderColor: theme.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   logo: {
     width: 64,
     height: 64,

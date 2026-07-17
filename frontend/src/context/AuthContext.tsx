@@ -19,8 +19,11 @@ export type VibeUser = {
   onboarded?: boolean;
   distance_km?: number;
   is_premium?: boolean;
+  is_admin?: boolean;
   boosted_until?: string;
   music_compatibility_pct?: number;
+  badges?: string[];
+  theme_id?: string;
 };
 
 type Ctx = {

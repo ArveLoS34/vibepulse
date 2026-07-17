@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/src/lib/api";
+import { useTranslation } from "@/src/i18n/LanguageContext";
 import { PostCard, Post } from "@/src/components/PostCard";
 import { Avatar } from "@/src/components/Avatar";
 import { theme, radius, spacing } from "@/src/lib/theme";
@@ -13,12 +14,31 @@ import type { VibeUser } from "@/src/context/AuthContext";
 export default function PublicProfile() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { t } = useTranslation();
   const [user, setUser] = useState<(VibeUser & { top_post?: any; now_playing?: any }) | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [askOpen, setAskOpen] = useState(false);
   const [questionText, setQuestionText] = useState("");
   const [askBusy, setAskBusy] = useState(false);
+
+  const [aiReportModal, setAiReportModal] = useState(false);
+  const [aiReportData, setAiReportData] = useState<any>(null);
+  const [aiReportBusy, setAiReportBusy] = useState(false);
+
+  const loadAiReport = async () => {
+    if (!user) return;
+    setAiReportBusy(true);
+    try {
+      const res = await api<{ compatibility_score: number; report: any }>(`/compatibility-report/${user.user_id}`, { method: "POST" });
+      setAiReportData(res);
+      setAiReportModal(true);
+    } catch {
+      alert("AI Uyum Raporu hazırlanamadı");
+    } finally {
+      setAiReportBusy(false);
+    }
+  };
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -131,7 +151,7 @@ export default function PublicProfile() {
               <View style={styles.spotifyWidget}>
                 <Ionicons name="musical-note" size={16} color="#1DB954" />
                 <Text style={styles.spotifyText}>
-                  Şu an dinliyor: {user.now_playing.song_title} — {user.now_playing.artist_name}
+                  {t("now_playing")}: {user.now_playing.song_title} — {user.now_playing.artist_name}
                 </Text>
               </View>
             ) : null}
@@ -141,7 +161,15 @@ export default function PublicProfile() {
             {/* Feature 2: Anonymous Question Button & Card */}
             <TouchableOpacity onPress={() => setAskOpen(!askOpen)} style={styles.askBtn} testID="ask-anonymous-btn">
               <Ionicons name="eye-off-outline" size={16} color="#fff" />
-              <Text style={styles.askBtnText}>🙈 Anonim Soru Sor (AMA)</Text>
+              <Text style={styles.askBtnText}>{t("ask_ama_btn")}</Text>
+            </TouchableOpacity>
+
+            {/* AI Compatibility Report Button */}
+            <TouchableOpacity onPress={loadAiReport} disabled={aiReportBusy} style={styles.aiReportBtn} testID="ai-report-btn">
+              <Ionicons name="sparkles" size={16} color="#F59E0B" />
+              <Text style={styles.aiReportText}>
+                {aiReportBusy ? t("ai_report_loading") : t("ai_report_btn")}
+              </Text>
             </TouchableOpacity>
 
             {askOpen && (
@@ -203,7 +231,7 @@ export default function PublicProfile() {
                 style={styles.vibeBtn}
               >
                 <Ionicons name="flash" size={18} color="#fff" />
-                <Text style={styles.vibeBtnText}>Vibe Gönder</Text>
+                <Text style={styles.vibeBtnText}>{t("send_vibe_btn")}</Text>
               </LinearGradient>
             </Pressable>
           </View>
@@ -225,6 +253,42 @@ export default function PublicProfile() {
           {posts.map((p) => <PostCard key={p.post_id} post={p} />)}
         </ScrollView>
       )}
+
+      {/* AI Compatibility Report Modal */}
+      <Modal visible={aiReportModal} animationType="slide" onRequestClose={() => setAiReportModal(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t("ai_report_title")}</Text>
+            <TouchableOpacity onPress={() => setAiReportModal(false)} style={{ padding: 6 }}>
+              <Ionicons name="close" size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+
+          {aiReportData && (
+            <ScrollView contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
+              <View style={styles.scoreCircle}>
+                <Text style={styles.scoreNumber}>%{aiReportData.compatibility_score}</Text>
+                <Text style={styles.scoreLabel}>{t("ai_report_score_label")}</Text>
+              </View>
+
+              <View style={styles.reportSection}>
+                <Text style={styles.reportHead}>{t("ai_report_why")}</Text>
+                <Text style={styles.reportBody}>{aiReportData.report.why_match}</Text>
+              </View>
+
+              <View style={styles.reportSection}>
+                <Text style={styles.reportHead}>{t("ai_report_common")}</Text>
+                <Text style={styles.reportBody}>{aiReportData.report.common_vibe}</Text>
+              </View>
+
+              <View style={styles.reportSection}>
+                <Text style={styles.reportHead}>{t("ai_report_date")}</Text>
+                <Text style={styles.reportBody}>{aiReportData.report.date_idea}</Text>
+              </View>
+            </ScrollView>
+          )}
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -294,6 +358,51 @@ const styles = StyleSheet.create({
   askSubmitBtn: { marginTop: 10, borderRadius: radius.pill, overflow: "hidden" },
   askSubmitInner: { paddingVertical: 10, alignItems: "center" },
   askSubmitText: { color: "#fff", fontWeight: "800", fontSize: 13 },
+  aiReportBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(245, 158, 11, 0.15)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.4)",
+  },
+  aiReportText: { color: "#F59E0B", fontSize: 13, fontWeight: "700" },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  modalTitle: { color: theme.text, fontSize: 18, fontWeight: "800" },
+  scoreCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "rgba(244,63,94,0.15)",
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: theme.rose,
+  },
+  scoreNumber: { color: theme.rose, fontSize: 32, fontWeight: "900" },
+  scoreLabel: { color: theme.textDim, fontSize: 11, fontWeight: "700", marginTop: 2 },
+  reportSection: {
+    backgroundColor: theme.card,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: theme.border,
+    gap: 6,
+  },
+  reportHead: { color: theme.text, fontSize: 15, fontWeight: "800" },
+  reportBody: { color: theme.textDim, fontSize: 14, lineHeight: 22 },
   bio: { color: theme.text, textAlign: "center", marginTop: spacing.md, fontSize: 15, lineHeight: 22 },
   metaRow: { flexDirection: "row", gap: 12, marginTop: spacing.md },
   meta: { color: theme.textDim, fontSize: 13 },
