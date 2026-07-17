@@ -632,7 +632,7 @@ const styles = StyleSheet.create({
   deleteAccountBtn: {
     flexDirection: "row",
     alignItems: "center",
-    justify.content: "center",
+    justifyContent: "center",
     gap: 8,
     paddingVertical: 14,
     borderRadius: radius.pill,
