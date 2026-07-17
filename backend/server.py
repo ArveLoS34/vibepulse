@@ -54,9 +54,48 @@ SMTP_USER = os.environ.get("SMTP_USER", "")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
 SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER or "noreply@vibepulse.app")
 
-OFFICIAL_IBAN = os.environ.get("OFFICIAL_IBAN", "TR12 0006 1000 0000 1234 5678 90")
-OFFICIAL_BANK_NAME = os.environ.get("OFFICIAL_BANK_NAME", "Ziraat Bankası / Garanti BBVA")
-OFFICIAL_ACCOUNT_HOLDER = os.environ.get("OFFICIAL_ACCOUNT_HOLDER", "VibePulse Teknoloji A.Ş.")
+OFFICIAL_IBAN = os.environ.get("OFFICIAL_IBAN", "TR88 0006 7010 0000 0076 1583 55")
+OFFICIAL_BANK_NAME = os.environ.get("OFFICIAL_BANK_NAME", "Yapı Kredi Bankası (YAPIKREDİ)")
+OFFICIAL_ACCOUNT_HOLDER = os.environ.get("OFFICIAL_ACCOUNT_HOLDER", "RECEP ALİ KESER")
+
+
+async def send_email_async(to_email: str, subject: str, html_content: str) -> bool:
+    if not SMTP_USER or not SMTP_PASSWORD:
+        log.warning("SMTP kimlik bilgileri ayarlanmamış. E-posta (%s) sunucuda oluşturuldu ama ağdan gönderilmedi.", to_email)
+        return False
+
+    def _send():
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = f"VibePulse App <{SMTP_FROM}>"
+        msg["To"] = to_email
+        msg.attach(MIMEText(html_content, "html", "utf-8"))
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_FROM, [to_email], msg.as_string())
+        return True
+
+    try:
+        await asyncio.to_thread(_send)
+        return True
+    except Exception as e:
+        log.error("E-posta gönderimi başarısız (%s): %s", to_email, e)
+        return False
+
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER or "noreply@vibepulse.app")
+
+OFFICIAL_IBAN = os.environ.get("OFFICIAL_IBAN", "TR88 0006 7010 0000 0076 1583 55")
+OFFICIAL_BANK_NAME = os.environ.get("OFFICIAL_BANK_NAME", "Yapı Kredi Bankası (YAPIKREDİ)")
+OFFICIAL_ACCOUNT_HOLDER = os.environ.get("OFFICIAL_ACCOUNT_HOLDER", "RECEP ALİ KESER")
 
 
 async def send_email_async(to_email: str, subject: str, html_content: str) -> bool:
@@ -660,6 +699,12 @@ class SpotifyStatusIn(BaseModel):
 
 class VerifyEmailIn(BaseModel):
     code: str
+
+
+class SubmitBankReceiptIn(BaseModel):
+    sender_name: str
+    amount_try: str = "299"
+    reference_note: Optional[str] = None
 
 
 class SubmitBankReceiptIn(BaseModel):
@@ -2260,9 +2305,48 @@ SMTP_USER = os.environ.get("SMTP_USER", "")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
 SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER or "noreply@vibepulse.app")
 
-OFFICIAL_IBAN = os.environ.get("OFFICIAL_IBAN", "TR12 0006 1000 0000 1234 5678 90")
-OFFICIAL_BANK_NAME = os.environ.get("OFFICIAL_BANK_NAME", "Ziraat Bankası / Garanti BBVA")
-OFFICIAL_ACCOUNT_HOLDER = os.environ.get("OFFICIAL_ACCOUNT_HOLDER", "VibePulse Teknoloji A.Ş.")
+OFFICIAL_IBAN = os.environ.get("OFFICIAL_IBAN", "TR88 0006 7010 0000 0076 1583 55")
+OFFICIAL_BANK_NAME = os.environ.get("OFFICIAL_BANK_NAME", "Yapı Kredi Bankası (YAPIKREDİ)")
+OFFICIAL_ACCOUNT_HOLDER = os.environ.get("OFFICIAL_ACCOUNT_HOLDER", "RECEP ALİ KESER")
+
+
+async def send_email_async(to_email: str, subject: str, html_content: str) -> bool:
+    if not SMTP_USER or not SMTP_PASSWORD:
+        log.warning("SMTP kimlik bilgileri ayarlanmamış. E-posta (%s) sunucuda oluşturuldu ama ağdan gönderilmedi.", to_email)
+        return False
+
+    def _send():
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = f"VibePulse App <{SMTP_FROM}>"
+        msg["To"] = to_email
+        msg.attach(MIMEText(html_content, "html", "utf-8"))
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_FROM, [to_email], msg.as_string())
+        return True
+
+    try:
+        await asyncio.to_thread(_send)
+        return True
+    except Exception as e:
+        log.error("E-posta gönderimi başarısız (%s): %s", to_email, e)
+        return False
+
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER or "noreply@vibepulse.app")
+
+OFFICIAL_IBAN = os.environ.get("OFFICIAL_IBAN", "TR88 0006 7010 0000 0076 1583 55")
+OFFICIAL_BANK_NAME = os.environ.get("OFFICIAL_BANK_NAME", "Yapı Kredi Bankası (YAPIKREDİ)")
+OFFICIAL_ACCOUNT_HOLDER = os.environ.get("OFFICIAL_ACCOUNT_HOLDER", "RECEP ALİ KESER")
 
 
 async def send_email_async(to_email: str, subject: str, html_content: str) -> bool:
