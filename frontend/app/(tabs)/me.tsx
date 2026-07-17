@@ -182,7 +182,7 @@ export default function MeScreen() {
               size={14}
               color={user.is_email_verified ? "#10B981" : "#F59E0B"}
             />
-            <Text style={[styles.emailPillText, { color: user.is_email_verified ? "#10B981" : "#F59E0B" }]}>
+            <Text style={[styles.emailPillText, { color: user.is_email_verified ? "#10B981" : "#F59E0B" }]}> 
               {user.is_email_verified ? "E-posta Doğrulandı" : "E-postanı Doğrula (Şimdi Tıkla)"}
             </Text>
           </TouchableOpacity>
@@ -632,7 +632,7 @@ const styles = StyleSheet.create({
   deleteAccountBtn: {
     flexDirection: "row",
     alignItems: "center",
-    justify.content: "center",
+    justifyContent: "center",
     gap: 8,
     paddingVertical: 14,
     borderRadius: radius.pill,
