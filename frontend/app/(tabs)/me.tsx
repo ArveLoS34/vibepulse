@@ -308,7 +308,7 @@ export default function MeScreen() {
 
           <View style={{ padding: spacing.xl, gap: spacing.lg }}>
             <Text style={{ color: theme.text, fontSize: 15, lineHeight: 22 }}>
-              <Text style={{ fontWeight: "700" }}>{user.email}</Text me> adresine 6 haneli doğrulama kodunuz iletildi.
+              <Text style={{ fontWeight: "700" }}>{user.email}</Text> adresine 6 haneli doğrulama kodunuz iletildi.
             </Text>
 
             {codeHint ? (
