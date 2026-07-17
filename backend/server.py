@@ -60,28 +60,43 @@ OFFICIAL_ACCOUNT_HOLDER = os.environ.get("OFFICIAL_ACCOUNT_HOLDER", "RECEP ALİ 
 
 
 async def send_email_async(to_email: str, subject: str, html_content: str) -> bool:
-    if not SMTP_USER or not SMTP_PASSWORD:
-        log.warning("SMTP kimlik bilgileri ayarlanmamış. E-posta (%s) sunucuda oluşturuldu ama ağdan gönderilmedi.", to_email)
-        return False
+    resend_key = os.environ.get("RESEND_API_KEY", "")
+    if resend_key:
+        try:
+            async with httpx.AsyncClient(timeout=10) as hx:
+                resp = await hx.post(
+                    "https://api.resend.com/emails",
+                    headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+                    json={"from": "VibePulse <onboarding@resend.dev>", "to": [to_email], "subject": subject, "html": html_content}
+                )
+                if resp.status_code in (200, 201, 202):
+                    log.info("E-posta Resend API ile başarıyla gönderildi (%s)", to_email)
+                    return True
+        except Exception as e:
+            log.warning("Resend API e-posta gönderimi başarısız: %s", e)
 
-    def _send():
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = f"VibePulse App <{SMTP_FROM}>"
-        msg["To"] = to_email
-        msg.attach(MIMEText(html_content, "html", "utf-8"))
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_FROM, [to_email], msg.as_string())
-        return True
+    if SMTP_USER and SMTP_PASSWORD:
+        def _send():
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"VibePulse App <{SMTP_FROM}>"
+            msg["To"] = to_email
+            msg.attach(MIMEText(html_content, "html", "utf-8"))
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+                server.starttls()
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(SMTP_FROM, [to_email], msg.as_string())
+            return True
 
-    try:
-        await asyncio.to_thread(_send)
-        return True
-    except Exception as e:
-        log.error("E-posta gönderimi başarısız (%s): %s", to_email, e)
-        return False
+        try:
+            await asyncio.to_thread(_send)
+            log.info("E-posta SMTP ile başarıyla gönderildi (%s)", to_email)
+            return True
+        except Exception as e:
+            log.error("SMTP gönderimi başarısız (%s): %s", to_email, e)
+
+    log.warning("SMTP veya E-posta API kimlik bilgisi yok (%s).", to_email)
+    return False
 
 import smtplib
 from email.mime.text import MIMEText
@@ -99,28 +114,43 @@ OFFICIAL_ACCOUNT_HOLDER = os.environ.get("OFFICIAL_ACCOUNT_HOLDER", "RECEP ALİ 
 
 
 async def send_email_async(to_email: str, subject: str, html_content: str) -> bool:
-    if not SMTP_USER or not SMTP_PASSWORD:
-        log.warning("SMTP kimlik bilgileri ayarlanmamış. E-posta (%s) sunucuda oluşturuldu ama ağdan gönderilmedi.", to_email)
-        return False
+    resend_key = os.environ.get("RESEND_API_KEY", "")
+    if resend_key:
+        try:
+            async with httpx.AsyncClient(timeout=10) as hx:
+                resp = await hx.post(
+                    "https://api.resend.com/emails",
+                    headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+                    json={"from": "VibePulse <onboarding@resend.dev>", "to": [to_email], "subject": subject, "html": html_content}
+                )
+                if resp.status_code in (200, 201, 202):
+                    log.info("E-posta Resend API ile başarıyla gönderildi (%s)", to_email)
+                    return True
+        except Exception as e:
+            log.warning("Resend API e-posta gönderimi başarısız: %s", e)
 
-    def _send():
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = f"VibePulse App <{SMTP_FROM}>"
-        msg["To"] = to_email
-        msg.attach(MIMEText(html_content, "html", "utf-8"))
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_FROM, [to_email], msg.as_string())
-        return True
+    if SMTP_USER and SMTP_PASSWORD:
+        def _send():
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"VibePulse App <{SMTP_FROM}>"
+            msg["To"] = to_email
+            msg.attach(MIMEText(html_content, "html", "utf-8"))
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+                server.starttls()
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(SMTP_FROM, [to_email], msg.as_string())
+            return True
 
-    try:
-        await asyncio.to_thread(_send)
-        return True
-    except Exception as e:
-        log.error("E-posta gönderimi başarısız (%s): %s", to_email, e)
-        return False
+        try:
+            await asyncio.to_thread(_send)
+            log.info("E-posta SMTP ile başarıyla gönderildi (%s)", to_email)
+            return True
+        except Exception as e:
+            log.error("SMTP gönderimi başarısız (%s): %s", to_email, e)
+
+    log.warning("SMTP veya E-posta API kimlik bilgisi yok (%s).", to_email)
+    return False
 
 
 JWT_ALGO = "HS256"
@@ -2398,28 +2428,43 @@ OFFICIAL_ACCOUNT_HOLDER = os.environ.get("OFFICIAL_ACCOUNT_HOLDER", "RECEP ALİ 
 
 
 async def send_email_async(to_email: str, subject: str, html_content: str) -> bool:
-    if not SMTP_USER or not SMTP_PASSWORD:
-        log.warning("SMTP kimlik bilgileri ayarlanmamış. E-posta (%s) sunucuda oluşturuldu ama ağdan gönderilmedi.", to_email)
-        return False
+    resend_key = os.environ.get("RESEND_API_KEY", "")
+    if resend_key:
+        try:
+            async with httpx.AsyncClient(timeout=10) as hx:
+                resp = await hx.post(
+                    "https://api.resend.com/emails",
+                    headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+                    json={"from": "VibePulse <onboarding@resend.dev>", "to": [to_email], "subject": subject, "html": html_content}
+                )
+                if resp.status_code in (200, 201, 202):
+                    log.info("E-posta Resend API ile başarıyla gönderildi (%s)", to_email)
+                    return True
+        except Exception as e:
+            log.warning("Resend API e-posta gönderimi başarısız: %s", e)
 
-    def _send():
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = f"VibePulse App <{SMTP_FROM}>"
-        msg["To"] = to_email
-        msg.attach(MIMEText(html_content, "html", "utf-8"))
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_FROM, [to_email], msg.as_string())
-        return True
+    if SMTP_USER and SMTP_PASSWORD:
+        def _send():
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"VibePulse App <{SMTP_FROM}>"
+            msg["To"] = to_email
+            msg.attach(MIMEText(html_content, "html", "utf-8"))
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+                server.starttls()
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(SMTP_FROM, [to_email], msg.as_string())
+            return True
 
-    try:
-        await asyncio.to_thread(_send)
-        return True
-    except Exception as e:
-        log.error("E-posta gönderimi başarısız (%s): %s", to_email, e)
-        return False
+        try:
+            await asyncio.to_thread(_send)
+            log.info("E-posta SMTP ile başarıyla gönderildi (%s)", to_email)
+            return True
+        except Exception as e:
+            log.error("SMTP gönderimi başarısız (%s): %s", to_email, e)
+
+    log.warning("SMTP veya E-posta API kimlik bilgisi yok (%s).", to_email)
+    return False
 
 import smtplib
 from email.mime.text import MIMEText
@@ -2437,28 +2482,43 @@ OFFICIAL_ACCOUNT_HOLDER = os.environ.get("OFFICIAL_ACCOUNT_HOLDER", "RECEP ALİ 
 
 
 async def send_email_async(to_email: str, subject: str, html_content: str) -> bool:
-    if not SMTP_USER or not SMTP_PASSWORD:
-        log.warning("SMTP kimlik bilgileri ayarlanmamış. E-posta (%s) sunucuda oluşturuldu ama ağdan gönderilmedi.", to_email)
-        return False
+    resend_key = os.environ.get("RESEND_API_KEY", "")
+    if resend_key:
+        try:
+            async with httpx.AsyncClient(timeout=10) as hx:
+                resp = await hx.post(
+                    "https://api.resend.com/emails",
+                    headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
+                    json={"from": "VibePulse <onboarding@resend.dev>", "to": [to_email], "subject": subject, "html": html_content}
+                )
+                if resp.status_code in (200, 201, 202):
+                    log.info("E-posta Resend API ile başarıyla gönderildi (%s)", to_email)
+                    return True
+        except Exception as e:
+            log.warning("Resend API e-posta gönderimi başarısız: %s", e)
 
-    def _send():
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = f"VibePulse App <{SMTP_FROM}>"
-        msg["To"] = to_email
-        msg.attach(MIMEText(html_content, "html", "utf-8"))
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_FROM, [to_email], msg.as_string())
-        return True
+    if SMTP_USER and SMTP_PASSWORD:
+        def _send():
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"VibePulse App <{SMTP_FROM}>"
+            msg["To"] = to_email
+            msg.attach(MIMEText(html_content, "html", "utf-8"))
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+                server.starttls()
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(SMTP_FROM, [to_email], msg.as_string())
+            return True
 
-    try:
-        await asyncio.to_thread(_send)
-        return True
-    except Exception as e:
-        log.error("E-posta gönderimi başarısız (%s): %s", to_email, e)
-        return False
+        try:
+            await asyncio.to_thread(_send)
+            log.info("E-posta SMTP ile başarıyla gönderildi (%s)", to_email)
+            return True
+        except Exception as e:
+            log.error("SMTP gönderimi başarısız (%s): %s", to_email, e)
+
+    log.warning("SMTP veya E-posta API kimlik bilgisi yok (%s).", to_email)
+    return False
 
 
     try:
