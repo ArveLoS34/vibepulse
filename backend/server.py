@@ -44,6 +44,46 @@ REDIS_URL = os.environ.get("REDIS_URL", "")
 
 redis_client = None
 
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER or "noreply@vibepulse.app")
+
+OFFICIAL_IBAN = os.environ.get("OFFICIAL_IBAN", "TR12 0006 1000 0000 1234 5678 90")
+OFFICIAL_BANK_NAME = os.environ.get("OFFICIAL_BANK_NAME", "Ziraat Bankası / Garanti BBVA")
+OFFICIAL_ACCOUNT_HOLDER = os.environ.get("OFFICIAL_ACCOUNT_HOLDER", "VibePulse Teknoloji A.Ş.")
+
+
+async def send_email_async(to_email: str, subject: str, html_content: str) -> bool:
+    if not SMTP_USER or not SMTP_PASSWORD:
+        log.warning("SMTP kimlik bilgileri ayarlanmamış. E-posta (%s) sunucuda oluşturuldu ama ağdan gönderilmedi.", to_email)
+        return False
+
+    def _send():
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = f"VibePulse App <{SMTP_FROM}>"
+        msg["To"] = to_email
+        msg.attach(MIMEText(html_content, "html", "utf-8"))
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_FROM, [to_email], msg.as_string())
+        return True
+
+    try:
+        await asyncio.to_thread(_send)
+        return True
+    except Exception as e:
+        log.error("E-posta gönderimi başarısız (%s): %s", to_email, e)
+        return False
+
+
 JWT_ALGO = "HS256"
 JWT_EXPIRY_DAYS = 30
 
@@ -622,6 +662,12 @@ class VerifyEmailIn(BaseModel):
     code: str
 
 
+class SubmitBankReceiptIn(BaseModel):
+    sender_name: str
+    amount_try: str = "299"
+    reference_note: Optional[str] = None
+
+
 class VerifyPaymentIn(BaseModel):
     payment_method: Optional[str] = "card"
     transaction_id: Optional[str] = None
@@ -764,11 +810,29 @@ async def send_verification_code(current=Depends(get_current_user)):
         }},
         upsert=True
     )
-    log.info("Email verification code generated for %s: %s", current.get("email"), code)
-    return {
+
+    html_body = f"""
+    <div style="font-family: sans-serif; max-width: 500px; padding: 20px; border-radius: 12px; background: #121212; color: #ffffff;">
+        <h2 style="color: #F43F5E; text-align: center;">VibePulse E-posta Doğrulama</h2>
+        <p>Merhaba <b>{current.get("name", "Kullanıcı")}</b>,</p>
+        <p>VibePulse hesabınızı doğrulamak için aşağıdaki 6 haneli güvenlik kodunu uygulamaya girin:</p>
+        <div style="text-align: center; margin: 30px 0;">
+            <span style="font-size: 32px; font-weight: 900; letter-spacing: 6px; padding: 12px 24px; background: #222; border-radius: 8px; color: #F43F5E;">{code}</span>
+        </div>
+        <p style="color: #888; font-size: 12px;">Bu kod 15 dakika boyunca geçerlidir.</p>
+    </div>
+    """
+
+    sent = await send_email_async(current["email"], "VibePulse E-posta Doğrulama Kodunuz 🔐", html_body)
+    log.info("Email verification code generated for %s: %s (sent_smtp=%s)", current.get("email"), code, sent)
+
+    res = {
         "message": f"6 haneli doğrulama kodunuz {current.get("email")} adresine gönderildi.",
-        "code": code
+        "sent_via_email": sent
     }
+    if not sent:
+        res["debug_hint"] = f"SMTP ayarlanmadığı için geçici doğrulama kodunuz: {code}"
+    return res
 
 
 @api.post("/auth/verify-email")
@@ -1503,6 +1567,36 @@ async def activate_boost(current=Depends(get_current_user)):
     return {"message": "Profiliniz 30 dakika boyunca öne çıkarıldı! ✨", "boosted_until": until}
 
 
+@api.get("/subscription/iban-info")
+async def get_iban_info():
+    return {
+        "iban": OFFICIAL_IBAN,
+        "bank": OFFICIAL_BANK_NAME,
+        "holder": OFFICIAL_ACCOUNT_HOLDER,
+        "price_try": "299 TL / Ay",
+        "instructions": "Havale / EFT açıklama kısmına e-posta adresinizi yazınız."
+    }
+
+
+@api.post("/subscription/submit-bank-receipt")
+async def submit_bank_receipt(payload: SubmitBankReceiptIn, current=Depends(get_current_user)):
+    doc = {
+        "receipt_id": new_id("rcp"),
+        "user_id": current["user_id"],
+        "email": current.get("email"),
+        "sender_name": payload.sender_name,
+        "amount": payload.amount_try,
+        "note": payload.reference_note or "",
+        "status": "pending_admin_approval",
+        "created_at": now_utc().isoformat()
+    }
+    await db.bank_receipts.insert_one(doc)
+    return {
+        "message": "Havale/EFT ödeme bildiriminiz alındı. Yönetici onayının ardından Premium paketiniz tanımlanacaktır. ⏳",
+        "receipt_id": doc["receipt_id"]
+    }
+
+
 @api.post("/subscription/create-checkout-session")
 async def create_checkout_session(payload: CheckoutSessionIn, current=Depends(get_current_user)):
     stripe_key = os.environ.get("STRIPE_SECRET_KEY", "")
@@ -1527,21 +1621,20 @@ async def create_checkout_session(payload: CheckoutSessionIn, current=Depends(ge
             )
             return {"url": session.url, "session_id": session.id}
         except Exception as e:
-            log.warning("Stripe call failed, returning demo session: %s", e)
+            log.error("Stripe call failed: %s", e)
+            raise HTTPException(status_code=500, detail=f"Ödeme sağlayıcı hatası: {e}")
 
-    await db.users.update_one(
-        {"user_id": current["user_id"]},
-        {"$set": {"is_premium": True, "premium_expires_at": (now_utc() + timedelta(days=30)).isoformat()}}
+    raise HTTPException(
+        status_code=400,
+        detail="Canlı kart ödeme altyapısı henüz yapılandırılmadı. Lütfen Havale/EFT (IBAN) seçeneğini kullanın."
     )
-    return {
-        "url": "https://vibepulse.app/premium-activated",
-        "message": "VibePulse Premium Paketi Aktif Edildi! ✨",
-        "is_premium": True
-    }
 
 
 @api.post("/subscription/verify-payment")
 async def verify_payment(payload: VerifyPaymentIn, current=Depends(get_current_user)):
+    if not payload.transaction_id or len(payload.transaction_id.strip()) < 5:
+        raise HTTPException(status_code=400, detail="Ödeme doğrulanamadı. Lütfen geçerli bir işlem veya dekont numarası girin.")
+
     expires = (now_utc() + timedelta(days=30)).isoformat()
     await db.users.update_one(
         {"user_id": current["user_id"]},
@@ -1549,9 +1642,9 @@ async def verify_payment(payload: VerifyPaymentIn, current=Depends(get_current_u
             "is_premium": True,
             "premium_expires_at": expires,
             "last_payment": {
-                "transaction_id": payload.transaction_id or new_id("tx"),
+                "transaction_id": payload.transaction_id,
                 "payment_method": payload.payment_method,
-                "amount": "$9.99",
+                "amount": "299 TL",
                 "date": now_utc().isoformat()
             }
         }}
@@ -2156,6 +2249,46 @@ async def _startup():
         except Exception as e:
             log.warning("Could not connect to Redis: %s", e)
             redis_client = None
+
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER or "noreply@vibepulse.app")
+
+OFFICIAL_IBAN = os.environ.get("OFFICIAL_IBAN", "TR12 0006 1000 0000 1234 5678 90")
+OFFICIAL_BANK_NAME = os.environ.get("OFFICIAL_BANK_NAME", "Ziraat Bankası / Garanti BBVA")
+OFFICIAL_ACCOUNT_HOLDER = os.environ.get("OFFICIAL_ACCOUNT_HOLDER", "VibePulse Teknoloji A.Ş.")
+
+
+async def send_email_async(to_email: str, subject: str, html_content: str) -> bool:
+    if not SMTP_USER or not SMTP_PASSWORD:
+        log.warning("SMTP kimlik bilgileri ayarlanmamış. E-posta (%s) sunucuda oluşturuldu ama ağdan gönderilmedi.", to_email)
+        return False
+
+    def _send():
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = f"VibePulse App <{SMTP_FROM}>"
+        msg["To"] = to_email
+        msg.attach(MIMEText(html_content, "html", "utf-8"))
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_FROM, [to_email], msg.as_string())
+        return True
+
+    try:
+        await asyncio.to_thread(_send)
+        return True
+    except Exception as e:
+        log.error("E-posta gönderimi başarısız (%s): %s", to_email, e)
+        return False
+
 
     try:
         await db.users.create_index("email", unique=True)

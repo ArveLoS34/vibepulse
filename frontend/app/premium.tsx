@@ -1,10 +1,12 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -24,6 +26,24 @@ export default function PremiumScreen() {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  // IBAN modal state
+  const [ibanModal, setIbanModal] = useState(false);
+  const [ibanInfo, setIbanInfo] = useState<any>(null);
+  const [senderName, setSenderName] = useState("");
+  const [referenceNote, setReferenceNote] = useState("");
+  const [receiptBusy, setReceiptBusy] = useState(false);
+
+  const loadIbanInfo = async () => {
+    try {
+      const res = await api<any>("/subscription/iban-info");
+      setIbanInfo(res);
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadIbanInfo();
+  }, []);
+
   const onSubscribe = async () => {
     setBusy(true);
     setErr(null);
@@ -36,12 +56,36 @@ export default function PremiumScreen() {
           body: JSON.stringify({ price_id: "price_premium_monthly" }),
         }
       );
-      setMsg(res.message || "Premium başarıyla aktif edildi! ✨");
+      if (res.url && res.url.startsWith("http")) {
+        setMsg("Stripe Ödeme Sayfasına Yönlendiriliyorsunuz...");
+      } else {
+        setMsg(res.message || "Ödeme isteğiniz alındı.");
+      }
       await refresh();
     } catch (e: any) {
-      setErr(e?.message || "Ödeme başlatılamadı");
+      // If card payment is not configured, automatically show IBAN option
+      setIbanModal(true);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const onSubmitReceipt = async () => {
+    if (!senderName.trim()) return alert("Lütfen ödemeyi yapan hesap sahibinin adını soyadını girin.");
+    setReceiptBusy(true);
+    try {
+      const res = await api<{ message: string }>("/subscription/submit-bank-receipt", {
+        method: "POST",
+        body: JSON.stringify({ sender_name: senderName.trim(), reference_note: referenceNote.trim() }),
+      });
+      alert(res.message);
+      setIbanModal(false);
+      setSenderName("");
+      setReferenceNote("");
+    } catch (e: any) {
+      alert(e?.message || "Makbuz bildirimi iletilemedi.");
+    } finally {
+      setReceiptBusy(false);
     }
   };
 
@@ -132,11 +176,18 @@ export default function PremiumScreen() {
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.primaryText}>
-                  {user?.is_premium ? "Premium Üyesiniz ✨" : "Premium'a Geç — ₺299/Ay"}
+                  {user?.is_premium ? "Premium Üyesiniz ✨" : "Kredi Kartı / Google Pay (₺299/Ay)"}
                 </Text>
               )}
             </LinearGradient>
           </TouchableOpacity>
+
+          {!user?.is_premium && (
+            <TouchableOpacity onPress={() => setIbanModal(true)} style={styles.ibanOptBtn}>
+              <Ionicons name="card-outline" size={18} color="#fff" />
+              <Text style={styles.ibanOptText}>Havale / EFT ile Öde (Resmi IBAN)</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             onPress={onActivateBoost}
@@ -155,6 +206,72 @@ export default function PremiumScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* IBAN Payment Modal */}
+      <Modal visible={ibanModal} animationType="slide" onRequestClose={() => setIbanModal(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>🏦 Resmi Havale / EFT Bilgileri</Text>
+            <TouchableOpacity onPress={() => setIbanModal(false)} style={{ padding: 6 }}>
+              <Ionicons name="close" size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
+            {ibanInfo ? (
+              <View style={styles.ibanCard}>
+                <Text style={styles.ibanBank}>{ibanInfo.bank}</Text>
+                <Text style={styles.ibanHolder}>Alıcı: {ibanInfo.holder}</Text>
+                <View style={styles.ibanBox}>
+                  <Text style={styles.ibanCode}>{ibanInfo.iban}</Text>
+                </View>
+                <Text style={styles.ibanPrice}>Aylık Abonelik Ücreti: {ibanInfo.price_try}</Text>
+                <Text style={styles.ibanNotice}>⚠️ {ibanInfo.instructions}</Text>
+              </View>
+            ) : (
+              <ActivityIndicator color={theme.rose} />
+            )}
+
+            <View style={styles.formBox}>
+              <Text style={styles.formTitle}>📝 Ödeme Bildirimi Gönder</Text>
+              <Text style={styles.formSub}>Ödemeyi yaptıktan sonra adınızı ve dekont notunuzu girin:</Text>
+
+              <TextInput
+                value={senderName}
+                onChangeText={setSenderName}
+                placeholder="Gönderen Adı Soyadı"
+                placeholderTextColor={theme.textMuted}
+                style={styles.input}
+              />
+
+              <TextInput
+                value={referenceNote}
+                onChangeText={setReferenceNote}
+                placeholder="Açıklama / Dekont No (İsteğe bağlı)"
+                placeholderTextColor={theme.textMuted}
+                style={styles.input}
+              />
+
+              <TouchableOpacity
+                onPress={onSubmitReceipt}
+                disabled={receiptBusy || !senderName.trim()}
+                style={[styles.submitBtn, (receiptBusy || !senderName.trim()) ? { opacity: 0.5 } : null]}
+              >
+                <LinearGradient
+                  colors={[theme.rose, "#8B5CF6"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{ paddingVertical: 14, alignItems: "center", borderRadius: radius.pill }}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "800", fontSize: 15 }}>
+                    {receiptBusy ? "Gönderiliyor..." : "Ödeme Bildirimini Onaya Gönder 🚀"}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -196,6 +313,18 @@ const styles = StyleSheet.create({
   actions: { gap: spacing.md, marginTop: spacing.lg },
   primaryBtn: { paddingVertical: 16, alignItems: "center", borderRadius: radius.pill },
   primaryText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+  ibanOptBtn: {
+    paddingVertical: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: radius.pill,
+    backgroundColor: theme.card,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  ibanOptText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   boostBtn: {
     paddingVertical: 14,
     alignItems: "center",
@@ -206,4 +335,47 @@ const styles = StyleSheet.create({
   },
   boostRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   boostText: { color: "#F59E0B", fontSize: 15, fontWeight: "700" },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  modalTitle: { color: theme.text, fontSize: 18, fontWeight: "800" },
+  ibanCard: {
+    backgroundColor: theme.card,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: "rgba(244,63,94,0.4)",
+    gap: 8,
+  },
+  ibanBank: { color: theme.text, fontSize: 18, fontWeight: "800" },
+  ibanHolder: { color: theme.textDim, fontSize: 14, fontWeight: "600" },
+  ibanBox: {
+    backgroundColor: "#000",
+    padding: 12,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: theme.border,
+    marginVertical: 4,
+  },
+  ibanCode: { color: theme.rose, fontSize: 16, fontWeight: "900", textAlign: "center", letterSpacing: 1 },
+  ibanPrice: { color: "#10B981", fontWeight: "800", fontSize: 15 },
+  ibanNotice: { color: "#F59E0B", fontSize: 12, lineHeight: 18, marginTop: 4 },
+  formBox: { gap: 12, marginTop: spacing.md },
+  formTitle: { color: theme.text, fontSize: 16, fontWeight: "800" },
+  formSub: { color: theme.textDim, fontSize: 13 },
+  input: {
+    backgroundColor: theme.card,
+    color: theme.text,
+    padding: 14,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: theme.border,
+    fontSize: 15,
+  },
+  submitBtn: { marginTop: 6 },
 });
