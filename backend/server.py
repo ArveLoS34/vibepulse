@@ -425,14 +425,15 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 def calculate_music_compatibility(u1_tags: list, u2_tags: list) -> int:
     if not u1_tags or not u2_tags:
-        return 82  # Baseline default compatibility
+        return random.randint(82, 91)
     s1, s2 = set(t.lower() for t in u1_tags), set(t.lower() for t in u2_tags)
     intersection = len(s1.intersection(s2))
     union = len(s1.union(s2))
     if union == 0:
-        return 82
+        return random.randint(82, 91)
     ratio = intersection / union
-    return min(99, max(65, int(70 + ratio * 29)))
+    base = 75 + int(ratio * 24)
+    return min(99, max(72, base))
 
 
 def public_user(user: dict, viewer: Optional[dict] = None, include_email: bool = False) -> dict:
@@ -514,6 +515,14 @@ async def _mod_rate_check(user_id: str) -> bool:
 
 
 async def moderate_text(text: str, user_id: str) -> tuple[bool, str]:
+    if not text or not text.strip():
+        return True, ""
+    
+    # Phone number / Doxxing regex shield
+    phone_pattern = r"(\+?90|0)?\s*5\d{2}\s*\d{3}\s*\d{2}\s*\d{2}"
+    if re.search(phone_pattern, text):
+        return False, "Güvenlik kuralı: Paylaşımlarda veya sohbetlerde telefon numarası paylaşılamaz."
+
     """Return (is_safe, reason).
 
     SEC-003: rate-limited per user; on any LLM error we now fail CLOSED so
@@ -1506,11 +1515,13 @@ async def ai_wingman(match_id: str, current=Depends(get_current_user)):
                 )
             ).with_model("anthropic", "claude-sonnet-4-5-20250929")
 
+            now_song = other_user.get("now_playing", {}).get("song_title", "") if other_user.get("now_playing") else ""
             prompt = (
                 f"Match Name: {other_user.get('name')}\n"
                 f"Bio: {other_user.get('bio', '')}\n"
                 f"Vibe: {other_user.get('vibe_status', '')}\n"
                 f"Interests: {', '.join(other_user.get('interests', []))}\n"
+                f"Now Playing Spotify: {now_song}\n"
                 f"Top post: {top_text}\n"
             )
 
@@ -1924,6 +1935,41 @@ async def get_quiz_compatibility(target_id: str, current=Depends(get_current_use
 
 
 # --- Admin Panel & Moderation Endpoints ---
+@api.get("/admin/pending-receipts")
+async def list_pending_receipts(current=Depends(get_current_user)):
+    if not current.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Sadece yöneticiler erişebilir.")
+    receipts = await db.bank_receipts.find({"status": "pending_admin_approval"}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return {"receipts": receipts}
+
+
+@api.post("/admin/receipts/{receipt_id}/approve")
+async def approve_receipt(receipt_id: str, current=Depends(get_current_user)):
+    if not current.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Sadece yöneticiler erişebilir.")
+
+    rcp = await db.bank_receipts.find_one({"receipt_id": receipt_id})
+    if not rcp:
+        raise HTTPException(status_code=404, detail="Ödeme dekontu bulunamadı.")
+
+    target_uid = rcp["user_id"]
+    expires = (now_utc() + timedelta(days=30)).isoformat()
+    
+    await db.users.update_one(
+        {"user_id": target_uid},
+        {"$set": {
+            "is_premium": True,
+            "premium_expires_at": expires
+        }}
+    )
+    await db.bank_receipts.update_one({"receipt_id": receipt_id}, {"$set": {"status": "approved", "approved_at": now_utc().isoformat()}})
+
+    # Send push notification to target user
+    asyncio.create_task(send_push_notification(target_uid, "Premium Aktif Edildi! ✨", "Havale/EFT ödemeniz onaylandı. 30 günlük Premium paketiniz başladı!"))
+
+    return {"message": "Ödeme onaylandı ve kullanıcının Premium paketi aktif edildi! ✨"}
+
+
 @api.get("/admin/stats")
 async def admin_stats(current=Depends(get_current_user)):
     total_users = await db.users.count_documents({})
