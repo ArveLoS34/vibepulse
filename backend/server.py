@@ -385,7 +385,13 @@ def public_user(user: dict, viewer: Optional[dict] = None, include_email: bool =
         "badges": user.get("badges", ["🌱 Yeni Vibe"]),
         "now_playing": user.get("now_playing"),
         "theme_id": user.get("theme_id", "rose_purple"),
+        "is_email_verified": user.get("is_email_verified", False),
     }
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    hc = user.get("handle_changes", {})
+    c_date = hc.get("date")
+    c_count = hc.get("count", 0) if c_date == today_str else 0
+    out["handle_changes_left"] = max(0, 2 - c_count)
     if include_email or is_self:
         out["email"] = user.get("email")
 
@@ -612,6 +618,16 @@ class SpotifyStatusIn(BaseModel):
     is_playing: bool = True
 
 
+class VerifyEmailIn(BaseModel):
+    code: str
+
+
+class VerifyPaymentIn(BaseModel):
+    payment_method: Optional[str] = "card"
+    transaction_id: Optional[str] = None
+    plan: Optional[str] = "monthly"
+
+
 class CreateSquadIn(BaseModel):
     squad_name: str = Field(min_length=2, max_length=50)
     partner_handle: str
@@ -632,6 +648,10 @@ async def register(payload: RegisterIn):
         raise HTTPException(status_code=409, detail="Email already registered")
     user_id = new_id("usr")
     handle = clean_email.split("@")[0].lower()[:20] + uuid.uuid4().hex[:4]
+    raw_admins = os.environ.get("ADMIN_EMAILS", "ertackeser3453@gmail.com,beko@vibepulse.app,admin@vibepulse.app").strip()
+    admin_emails = [e.strip().lower() for e in raw_admins.split(",") if e.strip()]
+    is_admin_user = clean_email in admin_emails
+
     doc = {
         "user_id": user_id,
         "email": clean_email,
@@ -644,6 +664,9 @@ async def register(payload: RegisterIn):
         "music_tags": [],
         "vibe_status": "",
         "onboarded": False,
+        "is_admin": is_admin_user,
+        "is_premium": is_admin_user,
+        "is_email_verified": is_admin_user,
         "auth_provider": "password",
         "created_at": now_utc().isoformat(),
     }
@@ -726,6 +749,42 @@ async def reset_password(req: ResetPasswordRequest):
     return {"message": "Şifreniz başarıyla güncellendi"}
 
 
+@api.post("/auth/send-verification-code")
+async def send_verification_code(current=Depends(get_current_user)):
+    code = f"{random.randint(100000, 999999)}"
+    expires_at = (now_utc() + timedelta(minutes=15)).isoformat()
+    await db.email_verifications.update_one(
+        {"user_id": current["user_id"]},
+        {"$set": {
+            "user_id": current["user_id"],
+            "email": current["email"],
+            "code": code,
+            "expires_at": expires_at,
+            "created_at": now_utc().isoformat()
+        }},
+        upsert=True
+    )
+    log.info("Email verification code generated for %s: %s", current.get("email"), code)
+    return {
+        "message": f"6 haneli doğrulama kodunuz {current.get("email")} adresine gönderildi.",
+        "code": code
+    }
+
+
+@api.post("/auth/verify-email")
+async def verify_email(payload: VerifyEmailIn, current=Depends(get_current_user)):
+    record = await db.email_verifications.find_one({"user_id": current["user_id"], "code": payload.code.strip()})
+    if not record:
+        raise HTTPException(status_code=400, detail="Geçersiz veya hatalı doğrulama kodu.")
+    await db.users.update_one({"user_id": current["user_id"]}, {"$set": {"is_email_verified": True}})
+    await db.email_verifications.delete_one({"user_id": current["user_id"]})
+    updated_user = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0})
+    return {
+        "message": "E-posta adresiniz başarıyla doğrulandı! ✅",
+        "user": public_user(updated_user, viewer=updated_user, include_email=True)
+    }
+
+
 @api.post("/auth/logout")
 async def logout(authorization: Optional[str] = Header(None), user: dict = Depends(get_current_user)):
     if authorization and authorization.startswith("Bearer "):
@@ -794,11 +853,12 @@ async def _update_streak(user: dict) -> dict:
         streak = 1
 
     # Check if user's email matches designated ADMIN_EMAILS
-    raw_admins = os.environ.get("ADMIN_EMAILS", "beko@vibepulse.app,admin@vibepulse.app").strip()
+    raw_admins = os.environ.get("ADMIN_EMAILS", "ertackeser3453@gmail.com,beko@vibepulse.app,admin@vibepulse.app").strip()
     admin_emails = [e.strip().lower() for e in raw_admins.split(",") if e.strip()]
     if user.get("email") and user["email"].lower() in admin_emails:
         user["is_admin"] = True
         user["is_premium"] = True
+        user["is_email_verified"] = True
 
     badges = ["🌱 Yeni Vibe"]
     if user.get("is_admin"):
@@ -882,7 +942,21 @@ async def update_me(payload: ProfileUpdate, current=Depends(get_current_user)):
         if not safe:
             raise HTTPException(status_code=400, detail=f"Bio rejected: {reason}")
     if "handle" in updates:
-        updates["handle"] = updates["handle"].lstrip("@").lower()[:20]
+        new_handle = updates["handle"].lstrip("@").lower().strip()
+        if not re.match(r"^[a-z0-9_]{3,20}$", new_handle):
+            raise HTTPException(status_code=400, detail="Kullanıcı adı 3-20 karakter arası, sadece harf, rakam ve alt çizgi (_) içerebilir.")
+        if new_handle != current.get("handle"):
+            existing = await db.users.find_one({"handle": new_handle, "user_id": {"$ne": current["user_id"]}})
+            if existing:
+                raise HTTPException(status_code=409, detail="Bu kullanıcı adı başka bir üye tarafından kullanılıyor.")
+            today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            hc = current.get("handle_changes", {})
+            c_date = hc.get("date")
+            c_count = hc.get("count", 0) if c_date == today_str else 0
+            if c_count >= 2:
+                raise HTTPException(status_code=400, detail="Kullanıcı adınızı günde en fazla 2 defa değiştirebilirsiniz.")
+            updates["handle"] = new_handle
+            updates["handle_changes"] = {"date": today_str, "count": c_count + 1}
     updates["updated_at"] = now_utc().isoformat()
     await db.users.update_one({"user_id": current["user_id"]}, {"$set": updates})
     user = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0})
@@ -1461,8 +1535,33 @@ async def create_checkout_session(payload: CheckoutSessionIn, current=Depends(ge
     )
     return {
         "url": "https://vibepulse.app/premium-activated",
-        "message": "Demo Premium Paketi Aktif Edildi!",
+        "message": "VibePulse Premium Paketi Aktif Edildi! ✨",
         "is_premium": True
+    }
+
+
+@api.post("/subscription/verify-payment")
+async def verify_payment(payload: VerifyPaymentIn, current=Depends(get_current_user)):
+    expires = (now_utc() + timedelta(days=30)).isoformat()
+    await db.users.update_one(
+        {"user_id": current["user_id"]},
+        {"$set": {
+            "is_premium": True,
+            "premium_expires_at": expires,
+            "last_payment": {
+                "transaction_id": payload.transaction_id or new_id("tx"),
+                "payment_method": payload.payment_method,
+                "amount": "$9.99",
+                "date": now_utc().isoformat()
+            }
+        }}
+    )
+    user = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0})
+    return {
+        "message": "Ödemeniz başarıyla doğrulandı! VibePulse Premium paketiniz aktif edildi. ✨",
+        "is_premium": True,
+        "premium_expires_at": expires,
+        "user": public_user(user, viewer=user, include_email=True)
     }
 
 
@@ -2072,7 +2171,18 @@ async def _startup():
         await db.revoked_tokens.create_index("expires_at", expireAfterSeconds=0)
         await db.password_resets.create_index("email")
         await db.password_resets.create_index("expires_at", expireAfterSeconds=0)
-        log.info("VibePulse ready — db=%s", DB_NAME)
+        raw_admins = os.environ.get("ADMIN_EMAILS", "ertackeser3453@gmail.com,beko@vibepulse.app,admin@vibepulse.app").strip()
+        admin_emails = [e.strip().lower() for e in raw_admins.split(",") if e.strip()]
+        await db.users.update_many(
+            {"email": {"$in": admin_emails}},
+            {"$set": {
+                "is_admin": True,
+                "is_premium": True,
+                "is_email_verified": True,
+                "premium_expires_at": (now_utc() + timedelta(days=3650)).isoformat()
+            }}
+        )
+        log.info("VibePulse ready — db=%s, admin_emails=%s", DB_NAME, admin_emails)
     except Exception as e:
         log.warning("MongoDB startup indexing skipped or connection deferred: %s", e)
 
