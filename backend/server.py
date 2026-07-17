@@ -743,6 +743,11 @@ async def root():
 @api.post("/auth/register")
 async def register(payload: RegisterIn):
     clean_email = payload.email.strip().lower()
+    domain = clean_email.split("@")[-1] if "@" in clean_email else ""
+    disposable_domains = {"mailinator.com", "tempmail.com", "10minutemail.com", "guerrillamail.com", "throwawaymail.com"}
+    if domain in disposable_domains:
+        raise HTTPException(status_code=400, detail="Geçici veya sahte e-posta adresleriyle kayıt olunamaz. Lütfen gerçek bir e-posta adresi kullanın.")
+
     existing = await db.users.find_one({"email": clean_email}, {"_id": 0, "user_id": 1})
     if existing:
         raise HTTPException(status_code=409, detail="Email already registered")
@@ -778,6 +783,7 @@ async def register(payload: RegisterIn):
 @api.post("/auth/login")
 async def login(payload: LoginIn):
     clean_email = payload.email.strip().lower()
+
     user = await db.users.find_one({"email": clean_email}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -1968,6 +1974,41 @@ async def approve_receipt(receipt_id: str, current=Depends(get_current_user)):
     asyncio.create_task(send_push_notification(target_uid, "Premium Aktif Edildi! ✨", "Havale/EFT ödemeniz onaylandı. 30 günlük Premium paketiniz başladı!"))
 
     return {"message": "Ödeme onaylandı ve kullanıcının Premium paketi aktif edildi! ✨"}
+
+
+@api.get("/system/status")
+async def system_status():
+    user_count = await db.users.count_documents({})
+    posts_count = await db.posts.count_documents({})
+    return {
+        "status": "online",
+        "version": "v2.5.0",
+        "active_users": user_count,
+        "total_posts": posts_count,
+        "speed_dating_active": is_speed_dating_active(),
+        "timestamp": now_utc().isoformat()
+    }
+
+
+@api.get("/admin/daily-report")
+async def admin_daily_report(current=Depends(get_current_user)):
+    if not current.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Sadece yöneticiler erişebilir.")
+
+    today_prefix = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    new_users = await db.users.count_documents({"created_at": {"$regex": f"^{today_prefix}"}})
+    new_posts = await db.posts.count_documents({"created_at": {"$regex": f"^{today_prefix}"}})
+    pending_receipts = await db.bank_receipts.count_documents({"status": "pending_admin_approval"})
+    pending_reports = await db.reports.count_documents({"status": "pending"})
+
+    return {
+        "report_date": today_prefix,
+        "new_users_today": new_users,
+        "new_posts_today": new_posts,
+        "pending_iban_receipts": pending_receipts,
+        "pending_content_reports": pending_reports,
+        "admin_email": current.get("email")
+    }
 
 
 @api.get("/admin/stats")
