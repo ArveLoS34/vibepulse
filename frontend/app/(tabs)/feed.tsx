@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, FlatList, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -56,21 +56,81 @@ export default function FeedScreen() {
     load();
   }, [load]);
 
+  const [speedModalOpen, setSpeedModalOpen] = useState(false);
+  const [speedStatus, setSpeedStatus] = useState<"waiting" | "matched" | "idle">("idle");
+  const [speedTimerSec, setSpeedTimerSec] = useState(0);
+  const speedPollRef = useRef<any>(null);
+  const speedTimerRef = useRef<any>(null);
+
   const joinSpeedDating = async () => {
+    const now = new Date();
+    const hour = now.getHours();
+
+    if (hour !== 21) {
+      alert("Etkinlik henüz başlamadı! ⌛\n\nSesli Hızlı Eşleşme Seansı her akşam sadece saat 21:00 - 22:00 arasında gerçekleşmektedir.");
+      return;
+    }
+
     try {
+      setSpeedModalOpen(true);
+      setSpeedStatus("waiting");
+      setSpeedTimerSec(0);
+
       const res = await api<{ matched: boolean; session?: any; message?: string }>("/speed-dating/join", {
         method: "POST",
         body: JSON.stringify({ preferred_gender: "everyone" }),
       });
+
       if (res.matched && res.session) {
-        router.push({ pathname: "/chat/[matchId]", params: { matchId: res.session.match_id } });
-      } else {
-        alert(res.message || "Eşleşme sırasındasınız!");
+        setSpeedStatus("matched");
+        setTimeout(() => {
+          setSpeedModalOpen(false);
+          router.push({ pathname: "/chat/[matchId]", params: { matchId: res.session.match_id } });
+        }, 1200);
       }
     } catch (e: any) {
-      alert(e?.message || "Sesli eşleşmeye katılınamadı");
+      setSpeedModalOpen(false);
+      alert(e?.message || "Etkinlik henüz başlamadı! ⌛");
     }
   };
+
+  const leaveSpeedDating = async () => {
+    try {
+      await api("/speed-dating/leave", { method: "POST" });
+    } catch {}
+    setSpeedModalOpen(false);
+    setSpeedStatus("idle");
+    clearInterval(speedPollRef.current);
+    clearInterval(speedTimerRef.current);
+  };
+
+  useEffect(() => {
+    if (!speedModalOpen || speedStatus === "matched") return;
+
+    speedTimerRef.current = setInterval(() => {
+      setSpeedTimerSec((s) => s + 1);
+    }, 1000);
+
+    speedPollRef.current = setInterval(async () => {
+      try {
+        const res = await api<{ status: string; session?: any }>("/speed-dating/status");
+        if (res.status === "matched" && res.session) {
+          setSpeedStatus("matched");
+          clearInterval(speedPollRef.current);
+          clearInterval(speedTimerRef.current);
+          setTimeout(() => {
+            setSpeedModalOpen(false);
+            router.push({ pathname: "/chat/[matchId]", params: { matchId: res.session.match_id } });
+          }, 1200);
+        }
+      } catch {}
+    }, 2000);
+
+    return () => {
+      clearInterval(speedPollRef.current);
+      clearInterval(speedTimerRef.current);
+    };
+  }, [speedModalOpen, speedStatus]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -219,6 +279,35 @@ export default function FeedScreen() {
       </TouchableOpacity>
 
       <ComposeModal visible={composeOpen} onClose={() => setComposeOpen(false)} onPosted={load} />
+
+      {/* v2 Feature 1: Speed Dating Radar / Lobi Modal */}
+      <Modal visible={speedModalOpen} animationType="fade" transparent onRequestClose={leaveSpeedDating}>
+        <View style={styles.speedBackdrop}>
+          <View style={styles.speedSheet}>
+            <View style={styles.radarCircle}>
+              <Ionicons name="radio" size={48} color={speedStatus === "matched" ? "#10B981" : "#F59E0B"} />
+            </View>
+
+            <Text style={styles.speedLobbyTitle}>
+              {speedStatus === "matched" ? "✨ Eşleşme Bulundu!" : "🎙️ Sesli Hızlı Eşleşme Lobi"}
+            </Text>
+
+            <Text style={styles.speedLobbySub}>
+              {speedStatus === "matched"
+                ? "3 dakikalık sesli sohbet pencerene aktarılıyorsun..."
+                : `Benzer müzik/vibe zevklerine sahip partner aranıyor (${Math.floor(speedTimerSec / 60)}:${String(speedTimerSec % 60).padStart(2, "0")})`}
+            </Text>
+
+            {speedStatus === "waiting" && (
+              <ActivityIndicator color={theme.rose} style={{ marginVertical: 12 }} />
+            )}
+
+            <TouchableOpacity onPress={leaveSpeedDating} style={styles.leaveSpeedBtn} testID="leave-speed-btn">
+              <Text style={{ color: theme.danger, fontWeight: "700" }}>Sıradan Çık</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -295,5 +384,43 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 6 },
     elevation: 12,
+  },
+  speedBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(10,10,11,0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xl,
+  },
+  speedSheet: {
+    width: "100%",
+    backgroundColor: theme.card,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.4)",
+  },
+  radarCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: "rgba(245,158,11,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.md,
+    borderWidth: 2,
+    borderColor: "rgba(245,158,11,0.5)",
+  },
+  speedLobbyTitle: { color: theme.text, fontSize: 20, fontWeight: "900", textAlign: "center" },
+  speedLobbySub: { color: theme.textDim, fontSize: 13, textAlign: "center", marginTop: 6 },
+  leaveSpeedBtn: {
+    marginTop: spacing.md,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(239,68,68,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.3)",
   },
 });

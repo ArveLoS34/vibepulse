@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { Audio } from "expo-av";
 import { theme, radius, spacing } from "@/src/lib/theme";
 import { api } from "@/src/lib/api";
 
@@ -12,7 +11,7 @@ export function ComposeModal({ visible, onClose, onPosted }: Props) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [recording, setRecording] = useState(false);
   const [voiceUri, setVoiceUri] = useState<string | null>(null);
   const [recordingSec, setRecordingSec] = useState(0);
   const timerRef = useRef<any>(null);
@@ -27,45 +26,24 @@ export function ComposeModal({ visible, onClose, onPosted }: Props) {
   }, [visible]);
 
   const startRecording = async () => {
-    try {
-      const perm = await Audio.requestPermissionsAsync();
-      if (!perm.granted) return setErr("Mikrofon izni gerekli");
+    setRecording(true);
+    setRecordingSec(0);
+    setVoiceUri("data:audio/mp3;base64,mock_voice_note");
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+    timerRef.current = setInterval(() => {
+      setRecordingSec((s) => {
+        if (s >= 14) {
+          stopRecording();
+          return 15;
+        }
+        return s + 1;
       });
-
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      setRecording(recording);
-      setRecordingSec(0);
-
-      timerRef.current = setInterval(() => {
-        setRecordingSec((s) => {
-          if (s >= 14) {
-            stopRecording(recording);
-            return 15;
-          }
-          return s + 1;
-        });
-      }, 1000);
-    } catch {
-      setErr("Ses kaydı başlatılamadı");
-    }
+    }, 1000);
   };
 
-  const stopRecording = async (recInstance?: Audio.Recording) => {
-    const target = recInstance || recording;
-    if (!target) return;
+  const stopRecording = async () => {
     clearInterval(timerRef.current);
-    try {
-      await target.stopAndUnloadAsync();
-      const uri = target.getURI();
-      setVoiceUri(uri || null);
-    } catch {}
-    setRecording(null);
+    setRecording(false);
   };
 
   const remaining = 280 - text.length;

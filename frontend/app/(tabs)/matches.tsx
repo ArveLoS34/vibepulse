@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/src/lib/api";
+import { useTranslation } from "@/src/i18n/LanguageContext";
 import { Avatar } from "@/src/components/Avatar";
 import { theme, radius, spacing } from "@/src/lib/theme";
 import type { VibeUser } from "@/src/context/AuthContext";
@@ -11,12 +12,15 @@ import type { VibeUser } from "@/src/context/AuthContext";
 type MatchRow = {
   match_id: string;
   created_at: string;
+  expires_at?: string;
+  hours_remaining?: number;
   other_user: VibeUser;
   last_message?: { text: string; created_at: string; from_user_id: string } | null;
 };
 
 export default function MatchesScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [rows, setRows] = useState<MatchRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -39,7 +43,7 @@ export default function MatchesScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Mesajlar</Text>
+        <Text style={styles.title}>{t("tab_matches")}</Text>
       </View>
 
       {loading ? (
@@ -75,6 +79,11 @@ export default function MatchesScreen() {
                       style={{ alignItems: "center", width: 74 }}
                     >
                       <Avatar uri={item.other_user.photos?.[0]} name={item.other_user.name || ""} size={64} ring />
+                      {typeof item.hours_remaining === "number" ? (
+                        <View style={styles.expiryBadge}>
+                          <Text style={styles.expiryText}>⏰ {t("match_expires_in").replace("{hours}", String(item.hours_remaining))}</Text>
+                        </View>
+                      ) : null}
                       <Text style={styles.newName} numberOfLines={1}>{item.other_user.name}</Text>
                     </Pressable>
                   )}
@@ -134,7 +143,17 @@ const styles = StyleSheet.create({
   emptyText: { color: theme.textDim, fontSize: 14, textAlign: "center", marginTop: 6 },
   newSection: { paddingTop: spacing.sm, paddingBottom: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border, marginBottom: spacing.sm },
   sectionTitle: { color: theme.textDim, fontSize: 12, fontWeight: "700", paddingHorizontal: spacing.lg, marginBottom: spacing.sm, textTransform: "uppercase", letterSpacing: 1 },
-  newName: { color: theme.text, fontSize: 12, marginTop: 6, textAlign: "center", maxWidth: 74 },
+  newName: { color: theme.text, fontSize: 12, marginTop: 4, textAlign: "center", maxWidth: 74 },
+  expiryBadge: {
+    backgroundColor: "rgba(239, 68, 68, 0.2)",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: "rgba(239, 68, 68, 0.4)",
+  },
+  expiryText: { color: theme.danger, fontSize: 10, fontWeight: "800" },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
   rowName: { color: theme.text, fontWeight: "700", fontSize: 15 },
   rowTime: { color: theme.textMuted, fontSize: 12 },

@@ -379,10 +379,12 @@ def public_user(user: dict, viewer: Optional[dict] = None, include_email: bool =
         "onboarded": user.get("onboarded", False),
         "created_at": user.get("created_at"),
         "is_premium": user.get("is_premium", False),
+        "is_admin": user.get("is_admin", False),
         "boosted_until": user.get("boosted_until"),
         "streak_days": user.get("streak_days", 1),
         "badges": user.get("badges", ["🌱 Yeni Vibe"]),
         "now_playing": user.get("now_playing"),
+        "theme_id": user.get("theme_id", "rose_purple"),
     }
     if include_email or is_self:
         out["email"] = user.get("email")
@@ -533,6 +535,7 @@ class ProfileUpdate(BaseModel):
     city: Optional[str] = None
     location: Optional[dict] = None  # {lat, lng}
     onboarded: Optional[bool] = None
+    theme_id: Optional[str] = "rose_purple"
 
 
 class PostCreate(BaseModel):
@@ -581,6 +584,13 @@ class QuizAnswersIn(BaseModel):
 
 class AdminResolveReportIn(BaseModel):
     action: Literal["dismiss", "delete_content", "ban_user"]
+
+
+class PromoteUserIn(BaseModel):
+    target_email: str
+    make_admin: bool = True
+    make_premium: bool = True
+    secret_key: Optional[str] = None
 
 
 class SpeedDatingJoinIn(BaseModel):
@@ -783,7 +793,16 @@ async def _update_streak(user: dict) -> dict:
     else:
         streak = 1
 
+    # Check if user's email matches designated ADMIN_EMAILS
+    raw_admins = os.environ.get("ADMIN_EMAILS", "beko@vibepulse.app,admin@vibepulse.app").strip()
+    admin_emails = [e.strip().lower() for e in raw_admins.split(",") if e.strip()]
+    if user.get("email") and user["email"].lower() in admin_emails:
+        user["is_admin"] = True
+        user["is_premium"] = True
+
     badges = ["🌱 Yeni Vibe"]
+    if user.get("is_admin"):
+        badges.append("👑 Sistem Yöneticisi")
     if streak >= 3:
         badges.append("🔥 3 Gün Serisi")
     if streak >= 7:
@@ -795,7 +814,13 @@ async def _update_streak(user: dict) -> dict:
 
     await db.users.update_one(
         {"user_id": user["user_id"]},
-        {"$set": {"streak_days": streak, "last_login_date": today_str, "badges": badges}}
+        {"$set": {
+            "streak_days": streak,
+            "last_login_date": today_str,
+            "badges": badges,
+            "is_admin": user.get("is_admin", False),
+            "is_premium": user.get("is_premium", False),
+        }}
     )
     user["streak_days"] = streak
     user["last_login_date"] = today_str
@@ -1116,7 +1141,9 @@ async def create_swipe(payload: SwipeIn, current=Depends(get_current_user)):
                     "match_id": new_id("mch"),
                     "user_ids": sorted([current["user_id"], payload.target_user_id]),
                     "created_at": now_utc().isoformat(),
+                    "expires_at": (now_utc() + timedelta(hours=24)).isoformat(),
                     "last_message_at": now_utc().isoformat(),
+                    "has_messages": False,
                 }
                 await db.matches.insert_one(match_doc)
                 match_doc.pop("_id", None)
@@ -1147,20 +1174,48 @@ async def create_swipe(payload: SwipeIn, current=Depends(get_current_user)):
 
 @api.get("/matches")
 async def list_matches(current=Depends(get_current_user)):
-    matches = await db.matches.find({"user_ids": current["user_id"]}, {"_id": 0}).sort("last_message_at", -1).to_list(100)
+    user_id = current["user_id"]
+    now_iso = now_utc().isoformat()
+
+    query = {
+        "user_ids": user_id,
+        "$or": [
+            {"expires_at": {"$gt": now_iso}},
+            {"expires_at": None},
+            {"has_messages": True}
+        ]
+    }
+
+    matches = await db.matches.find(query, {"_id": 0}).sort("last_message_at", -1).to_list(100)
     if not matches:
         return {"matches": []}
-    other_ids = [next(uid for uid in m["user_ids"] if uid != current["user_id"]) for m in matches]
+
+    other_ids = [next(uid for uid in m["user_ids"] if uid != user_id) for m in matches]
     users = await db.users.find({"user_id": {"$in": other_ids}}, {"_id": 0, "password": 0}).to_list(len(other_ids))
     umap = {u["user_id"]: u for u in users}
+
     out = []
     for m in matches:
-        other_id = next(uid for uid in m["user_ids"] if uid != current["user_id"])
+        other_id = next(uid for uid in m["user_ids"] if uid != user_id)
         other = umap.get(other_id, {})
         last = await db.messages.find_one({"match_id": m["match_id"]}, {"_id": 0}, sort=[("created_at", -1)])
+
+        hours_remaining = None
+        if m.get("expires_at") and not m.get("has_messages"):
+            try:
+                exp = datetime.fromisoformat(m["expires_at"])
+                if exp.tzinfo is None:
+                    exp = exp.replace(tzinfo=timezone.utc)
+                diff_sec = (exp - now_utc()).total_seconds()
+                hours_remaining = max(1, int(diff_sec // 3600))
+            except Exception:
+                pass
+
         out.append({
             "match_id": m["match_id"],
             "created_at": m["created_at"],
+            "expires_at": m.get("expires_at"),
+            "hours_remaining": hours_remaining,
             "last_message": last,
             "other_user": public_user(other, viewer=current) if other else {"user_id": other_id},
         })
@@ -1672,7 +1727,109 @@ async def resolve_admin_report(report_id: str, payload: AdminResolveReportIn, cu
     return {"message": f"Rapor işlem yapıldı: {payload.action}"}
 
 
-# --- v2 Feature 1: Blind Speed Dating Hour ---
+@api.post("/admin/promote-user")
+async def promote_user(payload: PromoteUserIn, current=Depends(get_current_user)):
+    expected_key = os.environ.get("ADMIN_SECRET_KEY", "VibePulse2026AdminKey")
+
+    is_authorized = current.get("is_admin") or (payload.secret_key and payload.secret_key == expected_key)
+    if not is_authorized:
+        raise HTTPException(status_code=403, detail="Bu işlemi yapmaya yetkiniz bulunmamaktadır.")
+
+    target_email = payload.target_email.strip().lower()
+    target = await db.users.find_one({"email": target_email})
+    if not target:
+        raise HTTPException(status_code=404, detail=f"'{target_email}' e-postasına sahip kullanıcı bulunamadı.")
+
+    badges = target.get("badges", [])
+    if payload.make_admin and "👑 Sistem Yöneticisi" not in badges:
+        badges.append("👑 Sistem Yöneticisi")
+    if payload.make_premium and "⭐ Premium" not in badges:
+        badges.append("⭐ Premium")
+
+    updates = {
+        "is_admin": payload.make_admin,
+        "is_premium": payload.make_premium,
+        "badges": badges,
+        "premium_expires_at": (now_utc() + timedelta(days=3650)).isoformat(),
+    }
+    await db.users.update_one({"user_id": target["user_id"]}, {"$set": updates})
+
+    return {
+        "message": f"'{target.get('name', target_email)}' kullanıcısına seçilen yetkiler başarıyla tanımlandı! 👑",
+        "target_email": target_email,
+        "is_admin": payload.make_admin,
+        "is_premium": payload.make_premium,
+    }
+
+
+# --- v2 Feature 5: AI Compatibility Report ---
+@api.post("/compatibility-report/{target_id}")
+async def get_ai_compatibility_report(target_id: str, current=Depends(get_current_user)):
+    target = await db.users.find_one({"user_id": target_id}, {"_id": 0, "password": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+
+    target_top = await db.posts.find_one({"user_id": target_id}, {"_id": 0}, sort=[("likes_count", -1)])
+    current_top = await db.posts.find_one({"user_id": current["user_id"]}, {"_id": 0}, sort=[("likes_count", -1)])
+
+    u1_music = current.get("music_tags") or current.get("interests") or []
+    u2_music = target.get("music_tags") or target.get("interests") or []
+    score = calculate_music_compatibility(u1_music, u2_music)
+
+    if EMERGENT_LLM_KEY:
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=f"report_{uuid.uuid4().hex[:8]}",
+                system_message=(
+                    "You are AI Compatibility Analyst for VibePulse dating app. "
+                    "Analyze the 2 user profiles and generate 3 short witty points in Turkish: "
+                    "1. Why they match well (why_match) "
+                    "2. Their shared humor/vibe (common_vibe) "
+                    "3. Ideal first date idea (date_idea). "
+                    "Format response as: 'WHY: <text> ||| VIBE: <text> ||| DATE: <text>'"
+                )
+            ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+
+            prompt = (
+                f"User 1 Name: {current.get('name')}, Bio: {current.get('bio')}, Vibe: {current.get('vibe_status')}, Top Post: {current_top.get('text') if current_top else ''}\n"
+                f"User 2 Name: {target.get('name')}, Bio: {target.get('bio')}, Vibe: {target.get('vibe_status')}, Top Post: {target_top.get('text') if target_top else ''}\n"
+            )
+
+            res = await asyncio.wait_for(chat.send_message(UserMessage(text=prompt)), timeout=8)
+            raw = str(res).strip()
+
+            why = "Mizah ve müzik zevkleriniz harika bir uyum yakalıyor!"
+            vibe = "Düşüncelerinizi filtresiz paylaşmayı seviyorsunuz."
+            date = "Kadıköy'de plakçıda kahve içip müzik dinlemek."
+
+            for part in raw.split("|||"):
+                p = part.strip()
+                if p.startswith("WHY:"): why = p.replace("WHY:", "").strip()
+                elif p.startswith("VIBE:"): vibe = p.replace("VIBE:", "").strip()
+                elif p.startswith("DATE:"): date = p.replace("DATE:", "").strip()
+
+            return {
+                "compatibility_score": score,
+                "report": {
+                    "why_match": why,
+                    "common_vibe": vibe,
+                    "date_idea": date
+                }
+            }
+        except Exception as e:
+            log.warning("AI compatibility report failed, using fallback: %s", e)
+
+    bio_topic = target.get("vibe_status") or (target.get("interests") or ["kahve"])[0]
+    return {
+        "compatibility_score": score,
+        "report": {
+            "why_match": f"{target.get('name', 'Kullanıcı')} ile düşünce frekansınız oldukça yüksek!",
+            "common_vibe": f"Her ikiniz de {bio_topic} konusundaki ince esprilerden keyif alıyorsunuz.",
+            "date_idea": "Sakin bir kafede kahve eşliğinde sohbet etmek."
+        }
+    }
 speed_dating_queue: list[dict] = []
 
 

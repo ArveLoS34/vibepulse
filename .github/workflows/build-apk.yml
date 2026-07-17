@@ -1,0 +1,48 @@
+name: Build Android APK (Fast Cloud - No Queue)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: ☕ Setup Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 🤖 Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 📦 Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm install
+
+      - name: 🛠️ Expo Prebuild & Assemble Release APK
+        run: |
+          cd frontend
+          npx expo prebuild --platform android --no-install
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: 🚀 Upload APK File
+        uses: actions/upload-artifact@v4
+        with:
+          name: VibePulse-Android-APK
+          path: frontend/android/app/build/outputs/apk/release/*.apk

@@ -5,6 +5,7 @@ import {
   Dimensions,
   Image,
   PanResponder,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -68,10 +69,13 @@ export default function DiscoverScreen() {
       try {
         Haptics.selectionAsync();
       } catch {}
+
+      const isWeb = Platform.OS === "web";
+
       Animated.timing(pan, {
         toValue: { x: targetX, y: 0 },
         duration: 220,
-        useNativeDriver: true,
+        useNativeDriver: !isWeb,
       }).start(async () => {
         const targetId = top.user_id;
         setCards((c) => c.slice(1));
@@ -87,12 +91,12 @@ export default function DiscoverScreen() {
             } catch {}
             setMatchInfo({ matchId: res.match.match_id, user: res.other_user });
           }
-        } catch {}
-        setBusy(false);
-        if (cards.length <= 2) load();
+        } catch {} finally {
+          setBusy(false);
+        }
       });
     },
-    [top, busy, pan, cards.length, load]
+    [top, busy, pan]
   );
 
   const responder = useRef(
@@ -102,7 +106,7 @@ export default function DiscoverScreen() {
       onPanResponderRelease: (_, g) => {
         if (g.dx > SWIPE_THRESHOLD) swipe("like", W * 1.2);
         else if (g.dx < -SWIPE_THRESHOLD) swipe("pass", -W * 1.2);
-        else Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: true, friction: 6 }).start();
+        else Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: Platform.OS !== "web", friction: 6 }).start();
       },
     })
   ).current;

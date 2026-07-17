@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import Constants from "expo-constants";
 import { api, TOKEN_KEY } from "@/src/lib/api";
 import { storage } from "@/src/utils/storage";
 import { useAuth } from "@/src/context/AuthContext";
@@ -104,7 +105,17 @@ export default function ChatScreen() {
       try {
         const token = await storage.secureGet<string>(TOKEN_KEY, "");
         if (!token) return;
-        const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+
+        const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest?.debuggerHost;
+        let detectedIp = "";
+        if (hostUri) {
+          const ip = hostUri.split(":")[0];
+          if (ip && ip !== "localhost" && ip !== "127.0.0.1") {
+            detectedIp = `http://${ip}:8000`;
+          }
+        }
+
+        const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "https://vibepulse-tg92.onrender.com";
         const wsUrl = backendUrl.replace(/^http/, "ws") + `/api/ws/chat/${matchId}?token=${encodeURIComponent(token)}`;
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;

@@ -67,7 +67,7 @@ export default function Onboarding() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [3, 4],
-      quality: 0.6,
+      quality: 0.4,
       base64: true,
     });
     if (!res.canceled && res.assets[0]?.base64) {

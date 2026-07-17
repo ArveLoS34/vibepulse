@@ -2,7 +2,6 @@ import React from "react";
 import { Image, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Audio } from "expo-av";
 import { Avatar } from "@/src/components/Avatar";
 import { theme, radius, spacing } from "@/src/lib/theme";
 import { api } from "@/src/lib/api";
@@ -45,40 +44,21 @@ export function PostCard({ post, onChange }: { post: Post; onChange?: (p: Post) 
   const [liked, setLiked] = React.useState(post.liked_by_me);
   const [count, setCount] = React.useState(post.likes_count);
   const [playingAudio, setPlayingAudio] = React.useState(false);
-  const soundRef = React.useRef<Audio.Sound | null>(null);
 
   React.useEffect(() => {
     setLiked(post.liked_by_me);
     setCount(post.likes_count);
   }, [post.liked_by_me, post.likes_count]);
 
-  const toggleAudio = async () => {
+  const toggleAudio = () => {
     if (!post.voice_note) return;
+    setPlayingAudio(!playingAudio);
     try {
-      if (soundRef.current) {
-        if (playingAudio) {
-          await soundRef.current.pauseAsync();
-          setPlayingAudio(false);
-        } else {
-          await soundRef.current.playAsync();
-          setPlayingAudio(true);
-        }
-      } else {
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: post.voice_note },
-          { shouldPlay: true }
-        );
-        soundRef.current = sound;
-        setPlayingAudio(true);
-        sound.setOnPlaybackStatusUpdate((status: any) => {
-          if (status.didJustFinish) {
-            setPlayingAudio(false);
-          }
-        });
+      if (typeof window !== "undefined" && (window as any).Audio) {
+        const sound = new (window as any).Audio(post.voice_note);
+        sound.play();
       }
-    } catch {
-      setPlayingAudio(false);
-    }
+    } catch {}
   };
 
   const toggleLike = async () => {
@@ -98,7 +78,23 @@ export function PostCard({ post, onChange }: { post: Post; onChange?: (p: Post) 
 
   const goPost = () => router.push({ pathname: "/post/[id]", params: { id: post.post_id } });
   const goProfile = () => router.push({ pathname: "/profile/[id]", params: { id: post.author.user_id } });
-  const sendVibe = () => router.push({ pathname: "/profile/[id]", params: { id: post.author.user_id } });
+
+  const sendVibe = async () => {
+    try {
+      const res = await api<{ matched: boolean; match: any }>("/swipes", {
+        method: "POST",
+        body: JSON.stringify({ target_user_id: post.author.user_id, action: "like" }),
+      });
+      if (res.matched && res.match) {
+        alert("🎉 Vibe Eşleşmesi Sağlandı!");
+        router.push({ pathname: "/chat/[matchId]", params: { matchId: res.match.match_id } });
+      } else {
+        alert(`✨ ${post.author.name || "Kullanıcıya"} Vibe gönderildi!`);
+      }
+    } catch {
+      router.push({ pathname: "/profile/[id]", params: { id: post.author.user_id } });
+    }
+  };
 
   return (
     <Pressable onPress={goPost} style={styles.wrap} testID={`post-${post.post_id}`}>

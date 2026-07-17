@@ -10,6 +10,7 @@ export function useLocation() {
       if (!user) return;
 
       try {
+        if (!Location || typeof Location.requestForegroundPermissionsAsync !== "function") return;
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") return;
 
@@ -22,7 +23,6 @@ export function useLocation() {
           lng: pos.coords.longitude,
         };
 
-        // Sync if location missing or shifted significantly
         if (!user.location || Math.abs(user.location.lat - newLoc.lat) > 0.01) {
           await updateProfile({ location: newLoc });
         }
