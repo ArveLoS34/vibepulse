@@ -405,6 +405,23 @@ async def is_token_revoked(token: str) -> bool:
     return doc is not None
 
 
+async def create_in_app_notification(target_user_id: str, notif_type: str, title: str, body: str, actor: Optional[dict] = None) -> None:
+    if not target_user_id:
+        return
+    doc = {
+        "notification_id": new_id("nft"),
+        "user_id": target_user_id,
+        "type": notif_type,
+        "title": title,
+        "body": body,
+        "actor": actor or {},
+        "read": False,
+        "created_at": now_utc().isoformat()
+    }
+    await db.notifications.insert_one(doc)
+    asyncio.create_task(send_push_notification(target_user_id, title, body, {"type": notif_type}))
+
+
 async def send_push_notification(user_id: str, title: str, body: str, data: Optional[dict] = None) -> None:
     """Send an Expo push notification to target user if registered."""
     try:
@@ -565,7 +582,10 @@ async def moderate_text(text: str, user_id: str) -> tuple[bool, str]:
     if not await _mod_rate_check(user_id):
         return False, "Rate limit: çok hızlı içerik gönderiyorsun. Biraz bekle."
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage  # type: ignore
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage  # type: ignore
+        except ImportError:
+            return True, ""  # Graceful fallback when local LLM package absent
 
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
@@ -1233,6 +1253,13 @@ async def toggle_like(post_id: str, current=Depends(get_current_user)):
     await db.posts.update_one(
         {"post_id": post_id}, {"$addToSet": {"likes": current["user_id"]}, "$inc": {"likes_count": 1}}
     )
+    author_id = post.get("user_id")
+    if author_id and author_id != current["user_id"]:
+        asyncio.create_task(create_in_app_notification(
+            author_id, "like", "Yeni Beğeni! 💖",
+            f"{current.get('name', 'Biri')} senin vibe gönderini beğendi.",
+            {"user_id": current["user_id"], "name": current.get("name"), "avatar": (current.get("photos") or [""])[0]}
+        ))
     return {"liked": True, "likes_count": post.get("likes_count", 0) + 1}
 
 
@@ -1278,6 +1305,13 @@ async def add_comment(post_id: str, payload: CommentCreate, current=Depends(get_
     }
     await db.comments.insert_one(doc)
     await db.posts.update_one({"post_id": post_id}, {"$inc": {"comments_count": 1}})
+    author_id = post.get("user_id")
+    if author_id and author_id != current["user_id"]:
+        asyncio.create_task(create_in_app_notification(
+            author_id, "comment", "Yeni Yorum! 💬",
+            f"{current.get('name', 'Biri')} gönderine yorum yaptı: {payload.text[:40]}",
+            {"user_id": current["user_id"], "name": current.get("name"), "avatar": (current.get("photos") or [""])[0]}
+        ))
     doc.pop("_id", None)
     return {
         "comment": {
@@ -1613,7 +1647,10 @@ async def send_message(match_id: str, payload: MessageCreate, current=Depends(ge
     doc.pop("_id", None)
 
     preview = "Sana bir fotoğraf gönderdi 📷" if (payload.image and not payload.text) else payload.text
-    asyncio.create_task(send_push_notification(other, "Yeni Mesaj 💬", f"{current.get('name', 'Biri')}: {preview}"))
+    asyncio.create_task(create_in_app_notification(
+        other, "message", "Yeni Mesaj 💬", f"{current.get(name, Biri)}: {preview}",
+        {"user_id": current["user_id"], "name": current.get("name"), "avatar": (current.get("photos") or [""])[0]}
+    ))
 
     return {"message": doc}
 
@@ -2043,6 +2080,20 @@ async def admin_daily_report(current=Depends(get_current_user)):
         "pending_content_reports": pending_reports,
         "admin_email": current.get("email")
     }
+
+
+@api.get("/notifications")
+async def list_notifications(current=Depends(get_current_user)):
+    user_id = current["user_id"]
+    nlist = await db.notifications.find({"user_id": user_id}, {"_id": 0}).sort("created_at", -1).limit(100).to_list(100)
+    unread = await db.notifications.count_documents({"user_id": user_id, "read": False})
+    return {"notifications": nlist, "unread_count": unread}
+
+
+@api.post("/notifications/read-all")
+async def mark_notifications_read(current=Depends(get_current_user)):
+    await db.notifications.update_many({"user_id": current["user_id"], "read": False}, {"$set": {"read": True}})
+    return {"message": "Tüm bildirimler okundu olarak işaretlendi. ✅"}
 
 
 @api.get("/admin/stats")

@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import { PostCard, Post } from "@/src/components/PostCard";
 import { ComposeModal } from "@/src/components/ComposeModal";
 import { Avatar } from "@/src/components/Avatar";
@@ -28,9 +29,48 @@ export default function FeedScreen() {
   // Story state
   const [addStoryOpen, setAddStoryOpen] = useState(false);
   const [storyText, setStoryText] = useState("");
+  const [storyMedia, setStoryMedia] = useState<string | null>(null);
   const [storyBusy, setStoryBusy] = useState(false);
   const [activeStoryGroup, setActiveStoryGroup] = useState<any | null>(null);
   const [activeStoryIdx, setActiveStoryIdx] = useState(0);
+
+  // Notification Center state
+  const [notifModalOpen, setNotifModalOpen] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
+
+  const loadNotifications = async () => {
+    try {
+      const res = await api<{ notifications: any[]; unread_count: number }>("/notifications");
+      setNotifications(res.notifications || []);
+      setUnreadNotifsCount(res.unread_count || 0);
+    } catch {}
+  };
+
+  const markNotifsRead = async () => {
+    try {
+      await api("/notifications/read-all", { method: "POST" });
+      setUnreadNotifsCount(0);
+      loadNotifications();
+    } catch {}
+  };
+
+  const pickStoryMedia = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return alert("Galeri izni gerekli");
+
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsEditing: true,
+      quality: 0.5,
+      base64: true,
+    });
+
+    if (!res.canceled && res.assets[0]?.base64) {
+      const mime = res.assets[0].mimeType || "image/jpeg";
+      setStoryMedia(`data:${mime};base64,${res.assets[0].base64}`);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -46,6 +86,7 @@ export default function FeedScreen() {
       const storyRes = await api<{ stories_feed: any[] }>("/stories");
       setStories(storyRes.stories_feed || []);
 
+      loadNotifications();
       setErr(null);
     } catch (e: any) {
       setErr(e?.message || "Feed yüklenemedi");
@@ -142,15 +183,16 @@ export default function FeedScreen() {
   }, [speedModalOpen, speedStatus]);
 
   const postStory = async () => {
-    if (!storyText.trim()) return;
+    if (!storyText.trim() && !storyMedia) return alert("Lütfen yazı veya bir fotoğraf/video seçin.");
     setStoryBusy(true);
     try {
       await api("/stories", {
         method: "POST",
-        body: JSON.stringify({ text: storyText.trim() }),
+        body: JSON.stringify({ text: storyText.trim(), image: storyMedia || undefined }),
       });
       alert("24 Saatlik Vibe Hikayeniz paylaşıldı! 🌟");
       setStoryText("");
+      setStoryMedia(null);
       setAddStoryOpen(false);
       load();
     } catch (e: any) {
@@ -183,6 +225,22 @@ export default function FeedScreen() {
             <Text style={{ color: "#fff", fontSize: 18, fontWeight: "900", fontStyle: "italic" }}>V</Text>
           </LinearGradient>
           <Text style={styles.brand}>VibePulse</Text>
+
+          {/* Notification Center Bell Icon */}
+          <TouchableOpacity
+            onPress={() => {
+              loadNotifications();
+              setNotifModalOpen(true);
+            }}
+            style={styles.bellBtn}
+          >
+            <Ionicons name="notifications-outline" size={22} color={theme.text} />
+            {unreadNotifsCount > 0 ? (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadText}>{unreadNotifsCount}</Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
         </View>
 
         {/* 24h Vibe Stories Circles Bar */}
@@ -325,45 +383,59 @@ export default function FeedScreen() {
 
       <ComposeModal visible={composeOpen} onClose={() => setComposeOpen(false)} onPosted={load} />
 
-      {/* Add Story Modal */}
+      {/* Add Story Modal with Photo & Video Picker */}
       <Modal visible={addStoryOpen} animationType="slide" onRequestClose={() => setAddStoryOpen(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>✨ 24 Saatlik Vibe Hikayesi Paylaş</Text>
+            <Text style={styles.modalTitle}>✨ 24Sa Vibe Hikayesi Paylaş</Text>
             <TouchableOpacity onPress={() => setAddStoryOpen(false)} style={{ padding: 6 }}>
               <Ionicons name="close" size={24} color={theme.text} />
             </TouchableOpacity>
           </View>
 
-          <View style={{ padding: spacing.xl, gap: spacing.md, flex: 1 }}>
+          <ScrollView contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
+            {/* Story Media Preview */}
+            {storyMedia ? (
+              <View style={styles.mediaPreviewBox}>
+                <Image source={{ uri: storyMedia }} style={styles.mediaPreviewImg} />
+                <TouchableOpacity onPress={() => setStoryMedia(null)} style={styles.removeMediaBtn}>
+                  <Ionicons name="close" size={18} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity onPress={pickStoryMedia} style={styles.mediaSelectBtn}>
+                <Ionicons name="camera-outline" size={32} color={theme.rose} />
+                <Text style={styles.mediaSelectText}>📷 Fotoğraf veya Video Ekle</Text>
+              </TouchableOpacity>
+            )}
+
             <TextInput
               value={storyText}
               onChangeText={setStoryText}
-              placeholder="Hikayende ne paylaşmak istersin? (24 saat sonra kaybolur)..."
+              placeholder="Hikayene bir yazı ekle..."
               placeholderTextColor={theme.textMuted}
               multiline
               maxLength={280}
               style={styles.storyInput}
-              autoFocus
             />
 
             <TouchableOpacity
               onPress={postStory}
-              disabled={storyBusy || !storyText.trim()}
-              style={{ marginTop: "auto", borderRadius: radius.pill, overflow: "hidden" }}
+              disabled={storyBusy || (!storyText.trim() && !storyMedia)}
+              style={[(storyBusy || (!storyText.trim() && !storyMedia)) ? { opacity: 0.5 } : null]}
             >
               <LinearGradient
                 colors={[theme.rose, "#8B5CF6"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={{ paddingVertical: 16, alignItems: "center" }}
+                style={{ paddingVertical: 16, alignItems: "center", borderRadius: radius.pill }}
               >
                 <Text style={{ color: "#fff", fontWeight: "800", fontSize: 16 }}>
                   {storyBusy ? "Paylaşılıyor..." : "Hikayemde Paylaş 🚀"}
                 </Text>
               </LinearGradient>
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         </SafeAreaView>
       </Modal>
 
@@ -391,16 +463,22 @@ export default function FeedScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Story Content Card */}
+              {/* Story Content Card with Photo/Video Media */}
               <View style={styles.storyBody}>
-                <LinearGradient
-                  colors={["rgba(244,63,94,0.15)", "rgba(139,92,246,0.25)"]}
-                  style={styles.storyCard}
-                >
-                  <Text style={styles.storyCardText}>
-                    "{activeStoryGroup.stories[activeStoryIdx]?.text || "Vibe Hikayesi"}"
-                  </Text>
-                </LinearGradient>
+                {activeStoryGroup.stories[activeStoryIdx]?.image ? (
+                  <Image source={{ uri: activeStoryGroup.stories[activeStoryIdx].image }} style={styles.storyFullMedia} />
+                ) : null}
+
+                {activeStoryGroup.stories[activeStoryIdx]?.text ? (
+                  <LinearGradient
+                    colors={["rgba(244,63,94,0.15)", "rgba(139,92,246,0.25)"]}
+                    style={styles.storyCard}
+                  >
+                    <Text style={styles.storyCardText}>
+                      "{activeStoryGroup.stories[activeStoryIdx].text}"
+                    </Text>
+                  </LinearGradient>
+                ) : null}
               </View>
 
               {/* Footer navigation */}
@@ -432,6 +510,52 @@ export default function FeedScreen() {
               </View>
             </>
           )}
+        </SafeAreaView>
+      </Modal>
+
+      {/* Notification Center Panel Modal */}
+      <Modal visible={notifModalOpen} animationType="slide" onRequestClose={() => setNotifModalOpen(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>🔔 Bildirim Paneli</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              {unreadNotifsCount > 0 ? (
+                <TouchableOpacity onPress={markNotifsRead} style={styles.readAllBtn}>
+                  <Text style={{ color: theme.rose, fontWeight: "700", fontSize: 12 }}>Tümünü Okundu İşaretle</Text>
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity onPress={() => setNotifModalOpen(false)} style={{ padding: 6 }}>
+                <Ionicons name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <FlatList
+            data={notifications}
+            keyExtractor={(item) => item.notification_id}
+            contentContainerStyle={{ padding: spacing.lg, gap: 12 }}
+            ListEmptyComponent={
+              <View style={{ padding: spacing.xxl, alignItems: "center" }}>
+                <Ionicons name="notifications-off-outline" size={48} color={theme.textMuted} />
+                <Text style={{ color: theme.text, fontSize: 16, fontWeight: "700", marginTop: 12 }}>
+                  Henüz bir bildirim yok
+                </Text>
+                <Text style={{ color: theme.textDim, fontSize: 13, textAlign: "center", marginTop: 4 }}>
+                  Biri seni beğendiğinde, yorum yaptığında veya mesaj attığında burada görünecektir!
+                </Text>
+              </View>
+            }
+            renderItem={({ item }) => (
+              <View style={[styles.notifCard, !item.read && styles.notifUnread]}>
+                <Avatar uri={item.actor?.avatar} name={item.actor?.name || "Vibe"} size={44} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.notifTitle}>{item.title}</Text>
+                  <Text style={styles.notifBody}>{item.body}</Text>
+                  <Text style={styles.notifTime}>{timeAgo(item.created_at)}</Text>
+                </View>
+              </View>
+            )}
+          />
         </SafeAreaView>
       </Modal>
 
@@ -467,6 +591,18 @@ export default function FeedScreen() {
   );
 }
 
+function timeAgo(iso?: string): string {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso).getTime();
+    const diff = Math.max(0, Date.now() - d) / 1000;
+    if (diff < 60) return "şimdi";
+    if (diff < 3600) return `${Math.floor(diff / 60)}dk`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}sa`;
+    return `${Math.floor(diff / 86400)}g`;
+  } catch { return ""; }
+}
+
 const styles = StyleSheet.create({
   header: {
     paddingHorizontal: spacing.lg,
@@ -477,7 +613,21 @@ const styles = StyleSheet.create({
   },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   logo: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  brand: { color: theme.text, fontWeight: "800", fontSize: 18, letterSpacing: -0.3 },
+  brand: { color: theme.text, fontWeight: "800", fontSize: 18, letterSpacing: -0.3, flex: 1 },
+  bellBtn: { position: "relative", padding: 6 },
+  unreadBadge: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    backgroundColor: theme.rose,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  unreadText: { color: "#fff", fontSize: 10, fontWeight: "900" },
   storyWrap: { alignItems: "center", width: 58 },
   storyRing: { padding: 2, borderRadius: 28 },
   addStoryRing: { position: "relative" },
@@ -547,7 +697,7 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     alignItems: "center",
-    justifyContent: "center",
+    justify.content: "center",
     shadowColor: theme.rose,
     shadowOpacity: 0.5,
     shadowRadius: 20,
@@ -563,13 +713,29 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.border,
   },
   modalTitle: { color: theme.text, fontSize: 18, fontWeight: "800" },
+  readAllBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: "rgba(244,63,94,0.15)" },
+  mediaSelectBtn: {
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderColor: theme.border,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: theme.card,
+  },
+  mediaSelectText: { color: theme.text, fontWeight: "700", fontSize: 14 },
+  mediaPreviewBox: { position: "relative", borderRadius: radius.lg, overflow: "hidden", height: 220, backgroundColor: "#000" },
+  mediaPreviewImg: { width: "100%", height: "100%", resizeMode: "cover" },
+  removeMediaBtn: { position: "absolute", top: 10, right: 10, backgroundColor: "rgba(0,0,0,0.7)", width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   storyInput: {
     backgroundColor: theme.card,
     color: theme.text,
     padding: 16,
     borderRadius: radius.lg,
-    fontSize: 18,
-    minHeight: 180,
+    fontSize: 16,
+    minHeight: 120,
     textAlignVertical: "top",
     borderWidth: 1,
     borderColor: theme.border,
@@ -577,19 +743,35 @@ const styles = StyleSheet.create({
   storyBarRow: { flexDirection: "row", gap: 4, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   storyBar: { flex: 1, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.2)" },
   storyAuthorRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingTop: spacing.md },
-  storyBody: { flex: 1, justifyContent: "center", padding: spacing.xl },
+  storyBody: { flex: 1, justifyContent: "center", alignItems: "center", padding: spacing.md },
+  storyFullMedia: { width: "100%", height: 380, borderRadius: radius.lg, resizeMode: "contain" },
   storyCard: {
-    padding: spacing.xxl,
+    padding: spacing.xl,
     borderRadius: radius.xl,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "rgba(244,63,94,0.4)",
-    minHeight: 280,
+    marginTop: 12,
+    width: "100%",
   },
-  storyCardText: { color: "#fff", fontSize: 22, fontWeight: "800", textAlign: "center", lineHeight: 32 },
+  storyCardText: { color: "#fff", fontSize: 20, fontWeight: "800", textAlign: "center", lineHeight: 28 },
   storyFooter: { flexDirection: "row", justifyContent: "space-between", padding: spacing.lg },
   storyNavBtn: { flexDirection: "row", alignItems: "center", gap: 6, padding: 10 },
+  notifCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: theme.card,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  notifUnread: { borderColor: theme.rose, backgroundColor: "rgba(244,63,94,0.08)" },
+  notifTitle: { color: theme.text, fontWeight: "800", fontSize: 14 },
+  notifBody: { color: theme.textDim, fontSize: 13, marginTop: 2 },
+  notifTime: { color: theme.textMuted, fontSize: 11, marginTop: 4 },
   speedBackdrop: {
     flex: 1,
     backgroundColor: "rgba(10,10,11,0.9)",

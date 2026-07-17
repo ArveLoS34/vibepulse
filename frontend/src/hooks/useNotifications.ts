@@ -4,6 +4,8 @@ import Constants from "expo-constants";
 import { useAuth } from "@/src/context/AuthContext";
 import { api } from "@/src/lib/api";
 
+const PROJECT_ID = "8b323a10-2595-4ef5-923f-vibepulse0001";
+
 export function useNotifications() {
   const { user } = useAuth();
 
@@ -11,7 +13,6 @@ export function useNotifications() {
     async function registerForPushNotifications() {
       if (!user) return;
 
-      // Skip push notification registration on Expo Go (SDK 53+ requirement)
       const isExpoGo =
         Constants.appOwnership === "expo" ||
         (Constants as any).executionEnvironment === "storeClient";
@@ -21,6 +22,18 @@ export function useNotifications() {
 
       try {
         const Notifications = await import("expo-notifications");
+
+        // Set foreground notification handler so alert banner pops up on screen
+        if (typeof Notifications.setNotificationHandler === "function") {
+          Notifications.setNotificationHandler({
+            handleNotification: async () => ({
+              shouldShowAlert: true,
+              shouldPlaySound: true,
+              shouldSetBadge: true,
+            }),
+          });
+        }
+
         const perm: any = await Notifications.getPermissionsAsync();
         let finalStatus = perm?.status || (perm?.granted ? "granted" : "denied");
 
@@ -31,8 +44,20 @@ export function useNotifications() {
 
         if (finalStatus !== "granted") return;
 
+        if (Platform.OS === "android" && typeof Notifications.setNotificationChannelAsync === "function") {
+          await Notifications.setNotificationChannelAsync("default", {
+            name: "VibePulse Bildirimleri",
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: "#F43F5E",
+            sound: "default",
+          });
+        }
+
         if (typeof Notifications.getExpoPushTokenAsync === "function") {
-          const tokenData = await Notifications.getExpoPushTokenAsync();
+          const tokenData = await Notifications.getExpoPushTokenAsync({
+            projectId: Constants.expoConfig?.extra?.eas?.projectId || PROJECT_ID,
+          });
           if (tokenData?.data) {
             await api("/users/push-token", {
               method: "POST",
@@ -40,17 +65,8 @@ export function useNotifications() {
             });
           }
         }
-
-        if (Platform.OS === "android" && typeof Notifications.setNotificationChannelAsync === "function") {
-          await Notifications.setNotificationChannelAsync("default", {
-            name: "default",
-            importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: "#F43F5E",
-          });
-        }
       } catch (err) {
-        // Push notification not supported in current environment
+        // Log push error silently if device lacks Play Services
       }
     }
 

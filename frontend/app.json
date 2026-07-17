@@ -8,6 +8,11 @@
     "scheme": "vibepulse",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
+    "extra": {
+      "eas": {
+        "projectId": "8b323a10-2595-4ef5-923f-vibepulse0001"
+      }
+    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.vibepulse.mobile",
@@ -31,7 +36,8 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE"
       ]
     },
     "web": {
@@ -53,7 +59,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Profil fotoğraflarınızı yüklemek için galerinizden seçim yapın."
+          "photosPermission": "Profil fotoğraflarınızı ve Vibe hikayelerinizi yüklemek için galerinizden seçim yapın."
         }
       ],
       "expo-location",
