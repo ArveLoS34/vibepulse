@@ -15,7 +15,7 @@ import { Avatar } from "@/src/components/Avatar";
 
 export default function MeScreen() {
   const router = useRouter();
-  const { user, refresh, logout, deleteAccount } = useAuth();
+  const { user, refresh, logout, deleteAccount, sendVerificationCode, verifyEmailCode } = useAuth();
   const { t } = useTranslation();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +24,41 @@ export default function MeScreen() {
   const [myQuestions, setMyQuestions] = useState<any[]>([]);
   const [replyText, setReplyText] = useState("");
   const [selectedQId, setSelectedQId] = useState<string | null>(null);
+
+  // Email verification state
+  const [verifyModalOpen, setVerifyModalOpen] = useState(false);
+  const [verifyCode, setVerifyCode] = useState("");
+  const [verifyBusy, setVerifyBusy] = useState(false);
+  const [codeHint, setCodeHint] = useState<string | null>(null);
+
+  const handleStartVerify = async () => {
+    setVerifyBusy(true);
+    try {
+      const code = await sendVerificationCode();
+      if (code) setCodeHint(code);
+      setVerifyModalOpen(true);
+    } catch (e: any) {
+      alert(e?.message || "Doğrulama kodu gönderilemedi");
+    } finally {
+      setVerifyBusy(false);
+    }
+  };
+
+  const handleConfirmCode = async () => {
+    if (!verifyCode.trim()) return alert("Lütfen 6 haneli kodu girin");
+    setVerifyBusy(true);
+    try {
+      await verifyEmailCode(verifyCode.trim());
+      alert("E-posta adresiniz başarıyla doğrulandı! ✅");
+      setVerifyModalOpen(false);
+      setVerifyCode("");
+      refresh();
+    } catch (e: any) {
+      alert(e?.message || "Doğrulama kodu geçersiz");
+    } finally {
+      setVerifyBusy(false);
+    }
+  };
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -135,6 +170,23 @@ export default function MeScreen() {
             {user.name} {user.age ? <Text style={styles.age}>, {user.age}</Text> : null}
           </Text>
           <Text style={styles.handle}>@{user.handle}</Text>
+          
+          {/* Email verification indicator */}
+          <TouchableOpacity
+            onPress={user.is_email_verified ? undefined : handleStartVerify}
+            disabled={verifyBusy}
+            style={styles.emailPill}
+          >
+            <Ionicons
+              name={user.is_email_verified ? "checkmark-circle" : "alert-circle"}
+              size={14}
+              color={user.is_email_verified ? "#10B981" : "#F59E0B"}
+            />
+            <Text style={[styles.emailPillText, { color: user.is_email_verified ? "#10B981" : "#F59E0B" }]}>
+              {user.is_email_verified ? "E-posta Doğrulandı" : "E-postanı Doğrula (Şimdi Tıkla)"}
+            </Text>
+          </TouchableOpacity>
+
           {user.vibe_status ? (
             <View style={styles.vibePill}>
               <Text style={styles.vibeText}>✨ {user.vibe_status}</Text>
@@ -243,6 +295,59 @@ export default function MeScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Email Verification Modal */}
+      <Modal visible={verifyModalOpen} animationType="slide" onRequestClose={() => setVerifyModalOpen(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>📧 E-posta Doğrulama</Text>
+            <TouchableOpacity onPress={() => setVerifyModalOpen(false)} style={{ padding: 6 }}>
+              <Ionicons name="close" size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ padding: spacing.xl, gap: spacing.lg }}>
+            <Text style={{ color: theme.text, fontSize: 15, lineHeight: 22 }}>
+              <Text style={{ fontWeight: "700" }}>{user.email}</Text me> adresine 6 haneli doğrulama kodunuz iletildi.
+            </Text>
+
+            {codeHint ? (
+              <View style={{ backgroundColor: "rgba(16,185,129,0.15)", padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: "#10B981" }}>
+                <Text style={{ color: "#10B981", fontWeight: "700", textAlign: "center" }}>
+                  🔑 Kodunuz: {codeHint}
+                </Text>
+              </View>
+            ) : null}
+
+            <TextInput
+              value={verifyCode}
+              onChangeText={setVerifyCode}
+              placeholder="6 Haneli Kod"
+              placeholderTextColor={theme.textMuted}
+              keyboardType="number-pad"
+              maxLength={6}
+              style={[styles.promoteInput, { fontSize: 20, textAlign: "center", letterSpacing: 6 }]}
+            />
+
+            <TouchableOpacity
+              onPress={handleConfirmCode}
+              disabled={verifyBusy || !verifyCode.trim()}
+              style={[styles.promoteSubmitBtn, (verifyBusy || !verifyCode.trim()) ? { opacity: 0.5 } : null]}
+            >
+              <LinearGradient
+                colors={[theme.rose, "#8B5CF6"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ paddingVertical: 12, alignItems: "center", borderRadius: radius.pill }}
+              >
+                <Text style={{ color: "#fff", fontWeight: "800" }}>
+                  {verifyBusy ? "Doğrulanıyor..." : "Doğrula & Onayla ✅"}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
 
       {/* AMA Questions Inbox Modal */}
       <Modal visible={questionsModalOpen} animationType="slide" onRequestClose={() => setQuestionsModalOpen(false)}>
@@ -377,6 +482,19 @@ const styles = StyleSheet.create({
   name: { color: theme.text, fontSize: 26, fontWeight: "900", marginTop: spacing.md, letterSpacing: -0.5 },
   age: { fontWeight: "400", color: theme.textDim },
   handle: { color: theme.textDim, marginTop: 2 },
+  emailPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  emailPillText: { fontSize: 11, fontWeight: "700" },
   vibePill: {
     marginTop: 10,
     paddingHorizontal: 14,
@@ -514,7 +632,7 @@ const styles = StyleSheet.create({
   deleteAccountBtn: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justify.content: "center",
     gap: 8,
     paddingVertical: 14,
     borderRadius: radius.pill,

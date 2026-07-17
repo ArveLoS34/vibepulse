@@ -20,8 +20,8 @@ export default function Welcome() {
         <View style={styles.orb2} />
         <View style={styles.header}>
           <View style={styles.topRow}>
-            <LinearGradient colors={[theme.rose, "#8B5CF6"]} style={styles.logo} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-              <Ionicons name="flash" size={32} color="#fff" />
+            <LinearGradient colors={["#F43F5E", "#8B5CF6"]} style={styles.logo} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+              <Text style={{ color: "#fff", fontSize: 36, fontWeight: "900", fontStyle: "italic", letterSpacing: -1 }}>V</Text>
             </LinearGradient>
             <TouchableOpacity onPress={() => setLangOpen(true)} style={styles.langBtn} testID="welcome-lang-btn">
               <Ionicons name="globe-outline" size={20} color={theme.text} />

@@ -20,6 +20,8 @@ export type VibeUser = {
   distance_km?: number;
   is_premium?: boolean;
   is_admin?: boolean;
+  is_email_verified?: boolean;
+  handle_changes_left?: number;
   boosted_until?: string;
   music_compatibility_pct?: number;
   badges?: string[];
@@ -34,6 +36,9 @@ type Ctx = {
   register: (email: string, password: string, name: string) => Promise<void>;
   loginGoogle: (sessionId: string) => Promise<void>;
   updateProfile: (patch: Partial<VibeUser> & { location?: any }) => Promise<void>;
+  sendVerificationCode: () => Promise<string>;
+  verifyEmailCode: (code: string) => Promise<void>;
+  verifyPayment: (method?: string, txId?: string) => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
 };
@@ -100,6 +105,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.user);
   };
 
+  const sendVerificationCode = async (): Promise<string> => {
+    const res = await api<{ message: string; code?: string }>("/auth/send-verification-code", {
+      method: "POST",
+    });
+    return res.code || "";
+  };
+
+  const verifyEmailCode = async (code: string) => {
+    const res = await api<{ message: string; user: VibeUser }>("/auth/verify-email", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    });
+    setUser(res.user);
+  };
+
+  const verifyPayment = async (method = "card", txId?: string) => {
+    const res = await api<{ message: string; user: VibeUser }>("/subscription/verify-payment", {
+      method: "POST",
+      body: JSON.stringify({ payment_method: method, transaction_id: txId }),
+    });
+    setUser(res.user);
+  };
+
   const logout = async () => {
     try {
       await api("/auth/logout", { method: "POST" });
@@ -123,7 +151,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const value = useMemo<Ctx>(
-    () => ({ loading, user, refresh, loginPassword, register, loginGoogle, updateProfile, logout, deleteAccount }),
+    () => ({
+      loading,
+      user,
+      refresh,
+      loginPassword,
+      register,
+      loginGoogle,
+      updateProfile,
+      sendVerificationCode,
+      verifyEmailCode,
+      verifyPayment,
+      logout,
+      deleteAccount,
+    }),
     [loading, user, refresh]
   );
 

@@ -26,6 +26,7 @@ export default function EditProfile() {
   const { user, updateProfile } = useAuth();
   const { t } = useTranslation();
   const [name, setName] = useState(user?.name || "");
+  const [handle, setHandle] = useState(user?.handle || "");
   const [bio, setBio] = useState(user?.bio || "");
   const [vibeStatus, setVibeStatus] = useState(user?.vibe_status || "");
   const [city, setCity] = useState(user?.city || "");
@@ -63,7 +64,7 @@ export default function EditProfile() {
     setBusy(true);
     setErr(null);
     try {
-      await updateProfile({ name, bio, vibe_status: vibeStatus, city, photos, theme_id: selectedTheme });
+      await updateProfile({ name, handle, bio, vibe_status: vibeStatus, city, photos, theme_id: selectedTheme });
       router.back();
     } catch (e: any) {
       setErr(e?.message || "Kaydedilemedi");
@@ -71,6 +72,8 @@ export default function EditProfile() {
       setBusy(false);
     }
   };
+
+  const changesLeft = user?.handle_changes_left ?? 2;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={["top", "bottom"]}>
@@ -116,6 +119,23 @@ export default function EditProfile() {
 
           <Text style={styles.label}>Ad</Text>
           <TextInput testID="edit-name" value={name} onChangeText={setName} style={styles.input} placeholderTextColor={theme.textMuted} />
+
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.lg }}>
+            <Text style={[styles.label, { marginTop: 0 }]}>Kullanıcı Adı (@kullanici_adi)</Text>
+            <Text style={{ color: theme.rose, fontSize: 11, fontWeight: "700" }}>
+              Günde 2 kez hakkınız var (Kalan: {changesLeft})
+            </Text>
+          </View>
+          <TextInput
+            testID="edit-handle"
+            value={handle}
+            onChangeText={setHandle}
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={styles.input}
+            placeholder="kullanici_adi"
+            placeholderTextColor={theme.textMuted}
+          />
 
           <Text style={styles.label}>Anlık Mood</Text>
           <TextInput
@@ -176,7 +196,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justify.content: "space-between",
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
