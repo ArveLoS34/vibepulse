@@ -154,7 +154,7 @@ async def send_email_async(to_email: str, subject: str, html_content: str) -> bo
 
 
 JWT_ALGO = "HS256"
-JWT_EXPIRY_DAYS = 30
+JWT_EXPIRY_DAYS = 3650
 
 # --- Content limits (SEC-002) ---
 MAX_PHOTOS_PER_USER = 6
@@ -1045,7 +1045,11 @@ async def _update_streak(user: dict) -> dict:
 @api.get("/auth/me")
 async def me(current=Depends(get_current_user)):
     updated_user = await _update_streak(current)
-    return {"user": public_user(updated_user, viewer=updated_user, include_email=True)}
+    fresh_token = create_token(updated_user["user_id"])
+    return {
+        "user": public_user(updated_user, viewer=updated_user, include_email=True),
+        "token": fresh_token
+    }
 
 
 # --- Canlı Harita Modu (Vibe Map) ---

@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useRouter } from "expo-router";
 import { api, clearToken, saveToken } from "@/src/lib/api";
 
 export type VibeUser = {
@@ -46,12 +47,16 @@ type Ctx = {
 const AuthContext = createContext<Ctx | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [user, setUser] = useState<VibeUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     try {
-      const res = await api<{ user: VibeUser }>("/auth/me");
+      const res = await api<{ user: VibeUser; token?: string }>("/auth/me");
+      if (res.token) {
+        await saveToken(res.token);
+      }
       setUser(res.user);
     } catch {
       setUser(null);
@@ -136,6 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       await clearToken();
       setUser(null);
+      router.replace("/(auth)/welcome");
     }
   };
 
@@ -147,6 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       await clearToken();
       setUser(null);
+      router.replace("/(auth)/welcome");
     }
   };
 
