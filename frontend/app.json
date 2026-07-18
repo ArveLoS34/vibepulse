@@ -63,8 +63,7 @@
         }
       ],
       "expo-location",
-      "expo-notifications",
-      "expo-screen-capture"
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true
