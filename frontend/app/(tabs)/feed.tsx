@@ -203,6 +203,26 @@ export default function FeedScreen() {
     loadLiveRooms();
   };
 
+  const sendLoungeChat = async () => {
+    if (!loungeMessage.trim() || !activeLounge) return;
+    const msgText = loungeMessage.trim();
+    setLoungeMessage("");
+    try {
+      const res = await api<{ message: any }>(`/live-rooms/${activeLounge.room_id}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ text: msgText }),
+      });
+      setLoungeChat((prev) => [...prev, res.message]);
+    } catch {
+      const fallback = {
+        id: String(Date.now()),
+        sender: user?.name || user?.handle || "Kullanıcı",
+        text: msgText,
+      };
+      setLoungeChat((prev) => [...prev, fallback]);
+    }
+  };
+
   const clearReadNotifs = async () => {
     try {
       await api("/notifications/clear-read", { method: "DELETE" });
