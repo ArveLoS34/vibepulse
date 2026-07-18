@@ -372,12 +372,6 @@ export default function FeedScreen() {
     }
   };
 
-  const openStoryViewer = (group: any) => {
-    setActiveStoryGroup(group);
-    setActiveStoryIdx(0);
-    setStoryReplyText("");
-  };
-
   const onRefresh = () => {
     setRefreshing(true);
     load();
@@ -680,7 +674,7 @@ export default function FeedScreen() {
               {/* Stage Speaker Grid (TikTok / Clubhouse Style) */}
               <View style={styles.loungeStage}>
                 {/* Active Mic Status Banner */}
-                <View style={{ marginBottom: 12, paddingHorizontal: 16, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: micMuted ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.15)", borderWidth: 1, borderColor: micMuted ? "rgba(239, 68, 68, 0.4)" : "rgba(16, 185, 129, 0.4)", flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <View style={{ marginBottom: 12, paddingHorizontal: 16, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: micMuted ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.15)" }}>
                   <Ionicons name={micMuted ? "mic-off" : "mic"} size={16} color={micMuted ? theme.danger : "#10B981"} />
                   <Text style={{ color: micMuted ? theme.danger : "#10B981", fontWeight: "800", fontSize: 12 }}>
                     {micMuted ? "🔇 Mikrofonunuz Kapalı" : "🔊 Canlı Mikrofon Açık — Sesiniz İletiliyor"}
@@ -1073,7 +1067,7 @@ const styles = StyleSheet.create({
   liveRoomTitle: { color: theme.text, fontSize: 12, fontWeight: "800", marginTop: 4 },
   liveRoomHostRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
   liveRoomHostName: { color: theme.cyan, fontSize: 11, fontWeight: "700", flex: 1 },
-  emptyLiveCard: { width: 220, backgroundColor: theme.card, padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: theme.border, alignItems: "center", justifyContent: "center", gap: 4 },
+  emptyLiveCard: { width: 220, backgroundColor: theme.card, padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: theme.border, alignItems: "center", justifyContent: "center", gap: 6 },
   chipBar: { marginTop: spacing.sm },
   chip: {
     paddingHorizontal: 14,
@@ -1227,7 +1221,7 @@ const styles = StyleSheet.create({
   chatSender: { color: theme.rose, fontWeight: "800", fontSize: 12 },
   chatText: { color: theme.text, fontSize: 12 },
   loungeBottomBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
-  loungeChatInput: { flex: 1, backgroundColor: theme.surface, color: theme.text, paddingHorizontal: 14, paddingVertical: 10, borderRadius: radius.pill, borderWidth: 1, borderColor: theme.border, fontSize: 13 },
+  loungeChatInput: { flex: 1, backgroundColor: theme.surface, color: theme.text, paddingHorizontal: 14, paddingVertical: 10, borderRadius: radius.pill, borderWidth: 1, borderColor: theme.border, fontSize: 14 },
   loungeSendBtn: { backgroundColor: theme.rose, width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
   raiseHandBtn: { backgroundColor: theme.card, width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: theme.border },
   speedBackdrop: {
