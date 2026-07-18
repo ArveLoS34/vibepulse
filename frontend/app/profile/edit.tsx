@@ -121,7 +121,7 @@ export default function EditProfile() {
         bio,
         vibe_status: vibeStatus,
         relationship_goal: relationshipGoal,
-        instagram_handle: instagramHandle.lstrip("@").trim(),
+        instagram_handle: instagramHandle.replace(/^@+/, "").trim(),
         spotify_favorite_artist: spotifyArtist.trim(),
         spotify_favorite_song: spotifySong.trim(),
         city,
