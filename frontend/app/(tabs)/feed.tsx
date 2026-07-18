@@ -20,11 +20,22 @@ export default function FeedScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [signals, setSignals] = useState<any[]>([]);
   const [stories, setStories] = useState<any[]>([]);
+  const [liveRooms, setLiveRooms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string>("Tüm");
   const [err, setErr] = useState<string | null>(null);
+
+  // Live Audio Room State
+  const [createRoomOpen, setCreateRoomOpen] = useState(false);
+  const [roomTitle, setRoomTitle] = useState("");
+  const [roomCategory, setRoomCategory] = useState("Sohbet & Vibe 🎵");
+  const [createRoomBusy, setCreateRoomBusy] = useState(false);
+  const [activeLounge, setActiveLounge] = useState<any | null>(null);
+  const [loungeMessage, setLoungeMessage] = useState("");
+  const [loungeChat, setLoungeChat] = useState<any[]>([]);
+  const [raisedHand, setRaisedHand] = useState(false);
 
   // Story state
   const [addStoryOpen, setAddStoryOpen] = useState(false);
@@ -46,6 +57,13 @@ export default function FeedScreen() {
       const res = await api<{ notifications: any[]; unread_count: number }>("/notifications");
       setNotifications(res.notifications || []);
       setUnreadNotifsCount(res.unread_count || 0);
+    } catch {}
+  };
+
+  const loadLiveRooms = async () => {
+    try {
+      const res = await api<{ live_rooms: any[] }>("/live-rooms");
+      setLiveRooms(res.live_rooms || []);
     } catch {}
   };
 
@@ -89,6 +107,7 @@ export default function FeedScreen() {
       setStories(storyRes.stories_feed || []);
 
       loadNotifications();
+      loadLiveRooms();
       setErr(null);
     } catch (e: any) {
       setErr(e?.message || "Feed yüklenemedi");
@@ -107,6 +126,59 @@ export default function FeedScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const handleStartLiveRoom = () => {
+    if (!user?.is_premium && !user?.is_admin) {
+      alert("🎙️ VIP Canlı Ses Odası Başlatma Ayrıcalığı\n\nKendi sesli yayın odanı açıp yayın yapmak için VibePulse Premium üyesi olmalısın!");
+      router.push("/premium");
+      return;
+    }
+    setCreateRoomOpen(true);
+  };
+
+  const submitCreateRoom = async () => {
+    if (!roomTitle.trim()) return alert("Lütfen oda başlığı girin.");
+    setCreateRoomBusy(true);
+    try {
+      const res = await api<{ message: string; room: any }>("/live-rooms", {
+        method: "POST",
+        body: JSON.stringify({ title: roomTitle.trim(), category: roomCategory }),
+      });
+      alert(res.message);
+      setCreateRoomOpen(false);
+      setRoomTitle("");
+      setActiveLounge(res.room);
+      loadLiveRooms();
+    } catch (e: any) {
+      alert(e?.message || "Oda oluşturulamadı.");
+    } finally {
+      setCreateRoomBusy(false);
+    }
+  };
+
+  const closeActiveLounge = async () => {
+    if (!activeLounge) return;
+    if (activeLounge.host_id === user?.user_id || user?.is_admin) {
+      try {
+        await api(`/live-rooms/${activeLounge.room_id}`, { method: "DELETE" });
+      } catch {}
+    }
+    setActiveLounge(null);
+    setLoungeChat([]);
+    setRaisedHand(false);
+    loadLiveRooms();
+  };
+
+  const sendLoungeChat = () => {
+    if (!loungeMessage.trim()) return;
+    const newMsg = {
+      id: String(Date.now()),
+      sender: user?.name || "Kullanıcı",
+      text: loungeMessage.trim(),
+    };
+    setLoungeChat((prev) => [...prev, newMsg]);
+    setLoungeMessage("");
+  };
 
   const [speedModalOpen, setSpeedModalOpen] = useState(false);
   const [speedStatus, setSpeedStatus] = useState<"waiting" | "matched" | "idle">("idle");
@@ -323,6 +395,45 @@ export default function FeedScreen() {
           ))}
         </ScrollView>
 
+        {/* TikTok Style VIP Live Audio Spaces Bar */}
+        <View style={styles.liveSpaceSection}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <Text style={styles.liveSpaceSectionTitle}>🎙️ TikTok VIP Canlı Ses Odaları</Text>
+            <TouchableOpacity onPress={handleStartLiveRoom} style={styles.startRoomBtn}>
+              <Ionicons name="radio" size={14} color="#fff" />
+              <Text style={styles.startRoomBtnText}>Oda Aç (VIP)</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+            {liveRooms.map((room) => (
+              <TouchableOpacity
+                key={room.room_id}
+                onPress={() => setActiveLounge(room)}
+                style={styles.liveRoomCard}
+              >
+                <View style={styles.liveBadge}>
+                  <Text style={styles.liveBadgeText}>🔴 CANLI</Text>
+                </View>
+                <Text style={styles.liveRoomCategory}>{room.category || "Sohbet"}</Text>
+                <Text style={styles.liveRoomTitle} numberOfLines={1}>{room.title}</Text>
+                <View style={styles.liveRoomHostRow}>
+                  <Avatar uri={room.host?.avatar} name={room.host?.name || "Host"} size={24} />
+                  <Text style={styles.liveRoomHostName} numberOfLines={1}>@{room.host?.handle || "yayıncı"}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+
+            {liveRooms.length === 0 ? (
+              <TouchableOpacity onPress={handleStartLiveRoom} style={styles.emptyLiveCard}>
+                <Ionicons name="mic" size={24} color="#8B5CF6" />
+                <Text style={{ color: theme.text, fontSize: 13, fontWeight: "700" }}>İlk VIP Canlı Ses Odasını Sen Aç!</Text>
+                <Text style={{ color: theme.textDim, fontSize: 11 }}>30 dakikalık sohbet / müzik odası başlat</Text>
+              </TouchableOpacity>
+            ) : null}
+          </ScrollView>
+        </View>
+
         {/* B4: Hashtag Chip Bar */}
         <ScrollView
           horizontal
@@ -426,6 +537,147 @@ export default function FeedScreen() {
       </TouchableOpacity>
 
       <ComposeModal visible={composeOpen} onClose={() => setComposeOpen(false)} onPosted={load} />
+
+      {/* Create VIP Live Audio Room Modal */}
+      <Modal visible={createRoomOpen} animationType="slide" onRequestClose={() => setCreateRoomOpen(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>🎙️ VIP Canlı Ses Odası Aç</Text>
+            <TouchableOpacity onPress={() => setCreateRoomOpen(false)} style={{ padding: 6 }}>
+              <Ionicons name="close" size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ padding: spacing.xl, gap: spacing.lg }}>
+            <Text style={{ color: theme.textDim, fontSize: 14, lineHeight: 20 }}>
+              Kendi canlı yayın odanı başlat! Diğer kullanıcılar oda katılarak seni dinleyebilir ve mesaj atabilir.
+            </Text>
+
+            <Text style={styles.labelTitle}>Oda Başlığı / Konusu</Text>
+            <TextInput
+              value={roomTitle}
+              onChangeText={setRoomTitle}
+              placeholder="Örn: Gece Müzik Sohbetleri & Kahve Vibe 🎵"
+              placeholderTextColor={theme.textMuted}
+              style={styles.inputField}
+              maxLength={100}
+            />
+
+            <Text style={styles.labelTitle}>Kategori</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {["Sohbet & Vibe 🎵", "Müzik Dinletisi 🎸", "İlişki Tavsiyeleri 💖", "Yazılım & Teknoloji 💻"].map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  onPress={() => setRoomCategory(cat)}
+                  style={[styles.catChip, roomCategory === cat && styles.catChipActive]}
+                >
+                  <Text style={[styles.catChipText, roomCategory === cat && styles.catChipTextActive]}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <TouchableOpacity
+              onPress={submitCreateRoom}
+              disabled={createRoomBusy || !roomTitle.trim()}
+              style={{ marginTop: spacing.xl }}
+            >
+              <LinearGradient
+                colors={[theme.rose, "#8B5CF6"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ paddingVertical: 16, alignItems: "center", borderRadius: radius.pill }}
+              >
+                <Text style={{ color: "#fff", fontWeight: "800", fontSize: 16 }}>
+                  {createRoomBusy ? "Oda Açılıyor..." : "Canlı Yayını Başlat 🚀"}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Full-Screen TikTok Style Live Audio Lounge Modal */}
+      <Modal visible={!!activeLounge} animationType="slide" onRequestClose={closeActiveLounge}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#0A0A0C", justifyContent: "space-between" }}>
+          {activeLounge && (
+            <>
+              {/* Lounge Header */}
+              <View style={styles.loungeHeader}>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <View style={styles.livePill}>
+                      <Text style={styles.livePillText}>🔴 CANLI SES YAYINI</Text>
+                    </View>
+                    <Text style={{ color: theme.textDim, fontSize: 12 }}>👥 {activeLounge.listeners_count || 1} Dinleyici</Text>
+                  </View>
+                  <Text style={styles.loungeTitle}>{activeLounge.title}</Text>
+                </View>
+                <TouchableOpacity onPress={closeActiveLounge} style={styles.leaveLoungeBtn}>
+                  <Text style={{ color: theme.danger, fontWeight: "800", fontSize: 13 }}>
+                    {activeLounge.host_id === user?.user_id ? "Odayı Bitir" : "Ayrıl"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Stage Speaker Grid (TikTok / Clubhouse Style) */}
+              <View style={styles.loungeStage}>
+                <ScrollView contentContainerStyle={{ flexDirection: "row", flexWrap: "wrap", gap: 20, justifyContent: "center", paddingVertical: spacing.xl }}>
+                  {(activeLounge.speakers || [activeLounge.host]).map((spk: any, idx: number) => (
+                    <View key={idx} style={styles.speakerBox}>
+                      <LinearGradient
+                        colors={[theme.rose, "#8B5CF6"]}
+                        style={styles.speakingWaveRing}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                      >
+                        <Avatar uri={spk.avatar} name={spk.name} size={70} />
+                      </LinearGradient>
+                      <Text style={styles.speakerName} numberOfLines={1}>{spk.name}</Text>
+                      <Text style={styles.speakerRole}>{spk.is_host ? "👑 Yayıncı" : "🎙️ Konuşmacı"}</Text>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Room Live Chat Feed */}
+              <View style={styles.loungeChatArea}>
+                <ScrollView contentContainerStyle={{ gap: 6, paddingHorizontal: spacing.lg }} style={{ maxHeight: 180 }}>
+                  {loungeChat.map((m) => (
+                    <View key={m.id} style={styles.chatBubbleInline}>
+                      <Text style={styles.chatSender}>@{m.sender}: </Text>
+                      <Text style={styles.chatText}>{m.text}</Text>
+                    </View>
+                  ))}
+                </ScrollView>
+
+                {/* Bottom Interactive Controls */}
+                <View style={styles.loungeBottomBar}>
+                  <TextInput
+                    value={loungeMessage}
+                    onChangeText={setLoungeMessage}
+                    placeholder="Odaya mesaj yaz..."
+                    placeholderTextColor={theme.textMuted}
+                    style={styles.loungeChatInput}
+                  />
+                  <TouchableOpacity onPress={sendLoungeChat} style={styles.loungeSendBtn}>
+                    <Ionicons name="send" size={18} color="#fff" />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      setRaisedHand(!raisedHand);
+                      alert(raisedHand ? "Söz talebi geri çekildi." : "Yayıncıya konuşma isteği gönderildi! ✋");
+                    }}
+                    style={[styles.raiseHandBtn, raisedHand && { backgroundColor: theme.amber }]}
+                  >
+                    <Text style={{ fontSize: 18 }}>✋</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </>
+          )}
+        </SafeAreaView>
+      </Modal>
 
       {/* Add Story Modal with Photo & Video Picker */}
       <Modal visible={addStoryOpen} animationType="slide" onRequestClose={() => setAddStoryOpen(false)}>
@@ -720,6 +972,18 @@ const styles = StyleSheet.create({
     borderColor: theme.bg,
   },
   storyName: { color: theme.textDim, fontSize: 11, fontWeight: "600", marginTop: 4, textAlign: "center" },
+  liveSpaceSection: { marginTop: spacing.md, backgroundColor: "rgba(139, 92, 246, 0.08)", padding: 10, borderRadius: radius.lg, borderWidth: 1, borderColor: "rgba(139, 92, 246, 0.25)" },
+  liveSpaceSectionTitle: { color: "#8B5CF6", fontSize: 12, fontWeight: "800" },
+  startRoomBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: theme.rose },
+  startRoomBtnText: { color: "#fff", fontWeight: "800", fontSize: 11 },
+  liveRoomCard: { width: 140, backgroundColor: theme.card, padding: 10, borderRadius: radius.md, borderWidth: 1, borderColor: "rgba(139, 92, 246, 0.4)", position: "relative" },
+  liveBadge: { position: "absolute", top: 6, right: 6, backgroundColor: "rgba(239,68,68,0.2)", paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.pill },
+  liveBadgeText: { color: theme.danger, fontSize: 9, fontWeight: "900" },
+  liveRoomCategory: { color: theme.textDim, fontSize: 10, fontWeight: "700" },
+  liveRoomTitle: { color: theme.text, fontSize: 12, fontWeight: "800", marginTop: 4 },
+  liveRoomHostRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 8 },
+  liveRoomHostName: { color: theme.cyan, fontSize: 11, fontWeight: "700", flex: 1 },
+  emptyLiveCard: { width: 220, backgroundColor: theme.card, padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: theme.border, alignItems: "center", justifyContent: "center", gap: 4 },
   chipBar: { marginTop: spacing.sm },
   chip: {
     paddingHorizontal: 14,
@@ -788,6 +1052,12 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.border,
   },
   modalTitle: { color: theme.text, fontSize: 18, fontWeight: "800" },
+  labelTitle: { color: theme.textDim, fontSize: 12, fontWeight: "800", textTransform: "uppercase", marginTop: 4 },
+  inputField: { backgroundColor: theme.card, color: theme.text, padding: 14, borderRadius: radius.md, borderWidth: 1, borderColor: theme.border, fontSize: 15 },
+  catChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.pill, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border },
+  catChipActive: { borderColor: theme.rose, backgroundColor: "rgba(244,63,94,0.15)" },
+  catChipText: { color: theme.textDim, fontSize: 13, fontWeight: "600" },
+  catChipTextActive: { color: theme.rose, fontWeight: "800" },
   readAllBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: "rgba(244,63,94,0.15)" },
   mediaSelectBtn: {
     borderWidth: 2,
@@ -851,6 +1121,24 @@ const styles = StyleSheet.create({
   notifTitle: { color: theme.text, fontWeight: "800", fontSize: 14 },
   notifBody: { color: theme.textDim, fontSize: 13, marginTop: 2 },
   notifTime: { color: theme.textMuted, fontSize: 11, marginTop: 4 },
+  loungeHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: theme.border },
+  livePill: { backgroundColor: "rgba(239, 68, 68, 0.2)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, borderWidth: 1, borderColor: "rgba(239, 68, 68, 0.4)" },
+  livePillText: { color: theme.danger, fontWeight: "900", fontSize: 10 },
+  loungeTitle: { color: theme.text, fontSize: 18, fontWeight: "900", marginTop: 4 },
+  leaveLoungeBtn: { backgroundColor: "rgba(239,68,68,0.15)", paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: "rgba(239,68,68,0.3)" },
+  loungeStage: { flex: 1, justifyContent: "center", alignItems: "center" },
+  speakerBox: { alignItems: "center", width: 90 },
+  speakingWaveRing: { padding: 4, borderRadius: 40 },
+  speakerName: { color: "#fff", fontWeight: "800", fontSize: 13, marginTop: 6 },
+  speakerRole: { color: theme.cyan, fontSize: 10, fontWeight: "700", marginTop: 2 },
+  loungeChatArea: { backgroundColor: theme.card, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingVertical: spacing.md },
+  chatBubbleInline: { flexDirection: "row", alignItems: "center" },
+  chatSender: { color: theme.rose, fontWeight: "800", fontSize: 12 },
+  chatText: { color: theme.text, fontSize: 12 },
+  loungeBottomBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  loungeChatInput: { flex: 1, backgroundColor: theme.surface, color: theme.text, paddingHorizontal: 14, paddingVertical: 10, borderRadius: radius.pill, borderWidth: 1, borderColor: theme.border, fontSize: 13 },
+  loungeSendBtn: { backgroundColor: theme.rose, width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  raiseHandBtn: { backgroundColor: theme.card, width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: theme.border },
   speedBackdrop: {
     flex: 1,
     backgroundColor: "rgba(10,10,11,0.9)",
