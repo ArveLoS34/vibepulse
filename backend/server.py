@@ -786,6 +786,12 @@ class VerifyPaymentIn(BaseModel):
     plan: Optional[str] = "monthly"
 
 
+class CreateLiveRoomIn(BaseModel):
+    title: str = Field(min_length=3, max_length=100)
+    category: Optional[str] = "Sohbet"
+    max_speakers: Optional[int] = 8
+
+
 class CreateSquadIn(BaseModel):
     squad_name: str = Field(min_length=2, max_length=50)
     partner_handle: str
@@ -2518,6 +2524,68 @@ async def update_spotify_status(payload: SpotifyStatusIn, current=Depends(get_cu
         {"$set": {"now_playing": status_doc}}
     )
     return {"message": "Spotify dinleme durumu güncellendi! 🎵", "now_playing": status_doc}
+
+
+# --- TikTok Style VIP Live Audio Lounges ---
+@api.get("/live-rooms")
+async def list_live_rooms(current=Depends(get_current_user)):
+    rooms = await db.live_rooms.find({"is_active": True}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return {"live_rooms": rooms}
+
+
+@api.post("/live-rooms")
+async def create_live_room(payload: CreateLiveRoomIn, current=Depends(get_current_user)):
+    if not current.get("is_premium") and not current.get("is_admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Canlı Ses Odası başlatmak VibePulse Premium ayrıcalığıdır. Lütfen Premium'a yükseltin! ⭐"
+        )
+
+    safe, reason = await moderate_text(payload.title, current["user_id"])
+    if not safe:
+        raise HTTPException(status_code=400, detail=f"Oda başlığı reddedildi: {reason}")
+
+    room_doc = {
+        "room_id": new_id("lvr"),
+        "host_id": current["user_id"],
+        "title": payload.title.strip(),
+        "category": payload.category or "Sohbet & Vibe",
+        "is_active": True,
+        "listeners_count": 1,
+        "host": {
+            "user_id": current["user_id"],
+            "name": current.get("name", ""),
+            "handle": current.get("handle", ""),
+            "avatar": (current.get("photos") or [""])[0] if current.get("photos") else "",
+        },
+        "speakers": [{
+            "user_id": current["user_id"],
+            "name": current.get("name", ""),
+            "handle": current.get("handle", ""),
+            "avatar": (current.get("photos") or [""])[0] if current.get("photos") else "",
+            "is_host": True,
+            "is_speaking": True
+        }],
+        "created_at": now_utc().isoformat()
+    }
+    await db.live_rooms.insert_one(room_doc)
+    room_doc.pop("_id", None)
+
+    log.info("Live Audio Room started by Premium user %s: %s", current.get("email"), payload.title)
+    return {"message": "Canlı Ses Odası başarıyla başlatıldı! 🎙️", "room": room_doc}
+
+
+@api.delete("/live-rooms/{room_id}")
+async def close_live_room(room_id: str, current=Depends(get_current_user)):
+    room = await db.live_rooms.find_one({"room_id": room_id})
+    if not room:
+        raise HTTPException(status_code=404, detail="Oda bulunamadı")
+
+    if room["host_id"] != current["user_id"] and not current.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Bu odayı sonlandırma yetkiniz yok.")
+
+    await db.live_rooms.update_one({"room_id": room_id}, {"$set": {"is_active": False, "ended_at": now_utc().isoformat()}})
+    return {"message": "Canlı Ses Odası sonlandırıldı. 🎙️"}
 
 
 # --- v2 Feature 4: Squads / Double Date Mode ---
