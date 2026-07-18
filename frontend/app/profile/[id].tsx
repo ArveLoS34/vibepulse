@@ -195,9 +195,13 @@ export default function PublicProfile() {
               ) : null}
             </TouchableOpacity>
 
-            <Text style={styles.name}>
-              {user.name}{user.age ? <Text style={styles.age}>, {user.age}</Text> : null}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.md }}>
+              <Text style={styles.name}>{user.name}</Text>
+              {user.is_verified ? (
+                <Ionicons name="checkmark-circle" size={22} color="#06B6D4" />
+              ) : null}
+              {user.age ? <Text style={styles.age}>, {user.age}</Text> : null}
+            </View>
             <Text style={styles.handle}>@{user.handle}</Text>
 
             {user.vibe_status ? (
@@ -213,12 +217,19 @@ export default function PublicProfile() {
               </View>
             ) : null}
 
-            {/* Feature 3: Live Spotify Widget */}
-            {user.now_playing ? (
+            {/* Social & Music Integration Badges */}
+            {user.instagram_handle ? (
+              <View style={styles.instaWidget}>
+                <Ionicons name="logo-instagram" size={16} color="#E1306C" />
+                <Text style={styles.instaText}>@{user.instagram_handle}</Text>
+              </View>
+            ) : null}
+
+            {user.spotify_favorite_song ? (
               <View style={styles.spotifyWidget}>
-                <Ionicons name="musical-note" size={16} color="#1DB954" />
+                <Ionicons name="musical-notes" size={16} color="#1DB954" />
                 <Text style={styles.spotifyText}>
-                  {t("now_playing")}: {user.now_playing.song_title} — {user.now_playing.artist_name}
+                  Favori Parça: {user.spotify_favorite_song} {user.spotify_favorite_artist ? `— ${user.spotify_favorite_artist}` : ""}
                 </Text>
               </View>
             ) : null}
@@ -448,7 +459,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   storyBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
-  name: { color: theme.text, fontSize: 26, fontWeight: "900", marginTop: spacing.md, letterSpacing: -0.5 },
+  name: { color: theme.text, fontSize: 26, fontWeight: "900", letterSpacing: -0.5 },
   age: { fontWeight: "400", color: theme.textDim },
   handle: { color: theme.textDim, marginTop: 2 },
   vibePill: {
@@ -466,6 +477,19 @@ const styles = StyleSheet.create({
     borderColor: "rgba(139,92,246,0.4)",
   },
   intentPillText: { color: "#8B5CF6", fontWeight: "800", fontSize: 12 },
+  instaWidget: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(225, 48, 108, 0.15)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: "rgba(225, 48, 108, 0.3)",
+  },
+  instaText: { color: "#E1306C", fontSize: 12, fontWeight: "700" },
   spotifyWidget: {
     flexDirection: "row",
     alignItems: "center",
@@ -588,6 +612,6 @@ const styles = StyleSheet.create({
   },
   storyCardText: { color: "#fff", fontSize: 20, fontWeight: "800", textAlign: "center", lineHeight: 28 },
   storyReplyBox: { flexDirection: "row", alignItems: "center", gap: 8, padding: spacing.lg },
-  storyReplyInput: { flex: 1, backgroundColor: theme.card, color: theme.text, paddingHorizontal: 16, paddingVertical: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: theme.border, fontFamily: "System" },
+  storyReplyInput: { flex: 1, backgroundColor: theme.card, color: theme.text, paddingHorizontal: 16, paddingVertical: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: theme.border, fontSize: 14 },
   storySendBtn: { backgroundColor: theme.rose, width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
 });

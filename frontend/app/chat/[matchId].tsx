@@ -4,8 +4,10 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -62,6 +64,10 @@ export default function ChatScreen() {
   const [wingmanBusy, setWingmanBusy] = useState(false);
   const [wingmanSuggestions, setWingmanSuggestions] = useState<string[]>([]);
 
+  // Venue Date Suggestions Modal State
+  const [venueModalOpen, setVenueModalOpen] = useState(false);
+  const [venues, setVenues] = useState<any[]>([]);
+
   // Media Attachment State
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [recordingVoice, setRecordingVoice] = useState(false);
@@ -72,6 +78,27 @@ export default function ChatScreen() {
   const listRef = useRef<FlatList>(null);
   const pollRef = useRef<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
+
+  const loadVenues = async () => {
+    try {
+      const res = await api<{ venues: any[] }>("/venues/popular");
+      setVenues(res.venues || []);
+      setVenueModalOpen(true);
+    } catch {}
+  };
+
+  const handleSuggestVenue = async (venue: any) => {
+    try {
+      await api(`/matches/${matchId}/suggest-venue`, {
+        method: "POST",
+        body: JSON.stringify({ venue_name: venue.name, address: venue.address }),
+      });
+      setVenueModalOpen(false);
+      load();
+    } catch (e: any) {
+      alert(e?.message || "Buluşma önerisi gönderilemedi");
+    }
+  };
 
   const startVoiceRecord = async () => {
     setRecordingVoice(true);
@@ -220,6 +247,12 @@ export default function ChatScreen() {
           <Text style={styles.name} numberOfLines={1}>{other?.name || "Sohbet"}</Text>
           <Text style={styles.status}>🔒 Ekran Görüntüsü Engeli Aktif</Text>
         </View>
+
+        <TouchableOpacity onPress={loadVenues} style={styles.venueBtn}>
+          <Ionicons name="cafe" size={16} color="#10B981" />
+          <Text style={{ color: "#10B981", fontSize: 11, fontWeight: "800" }}>☕ Buluş</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity onPress={loadWingman} style={styles.wingmanBtn} testID="chat-ai-wingman">
           <Ionicons name="sparkles" size={16} color="#F59E0B" />
           <Text style={styles.wingmanText}>AI Wingman</Text>
@@ -392,6 +425,34 @@ export default function ChatScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Popular Date Venues Selection Modal */}
+      <Modal visible={venueModalOpen} animationType="slide" onRequestClose={() => setVenueModalOpen(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>☕ Buluşma Noktası Öner</Text>
+            <TouchableOpacity onPress={() => setVenueModalOpen(false)} style={{ padding: 6 }}>
+              <Ionicons name="close" size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+
+          <FlatList
+            data={venues}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ padding: spacing.lg, gap: 12 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity onPress={() => handleSuggestVenue(item)} style={styles.venueCard}>
+                <Ionicons name="cafe-outline" size={28} color={theme.rose} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.venueCardName}>{item.name}</Text>
+                  <Text style={styles.venueCardCategory}>{item.category} • {item.address}</Text>
+                </View>
+                <Ionicons name="send-outline" size={20} color={theme.cyan} />
+              </TouchableOpacity>
+            )}
+          />
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -409,6 +470,17 @@ const styles = StyleSheet.create({
   iconBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   name: { color: theme.text, fontWeight: "700", fontSize: 16 },
   status: { color: "#10B981", fontSize: 11, fontWeight: "700" },
+  venueBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(16, 185, 129, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(16, 185, 129, 0.4)",
+  },
   wingmanBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -515,4 +587,25 @@ const styles = StyleSheet.create({
   emptyTitle: { color: theme.text, fontSize: 18, fontWeight: "700", marginTop: spacing.md },
   emptyText: { color: theme.textDim, fontSize: 14, textAlign: "center", marginTop: 6, maxWidth: 260 },
   err: { color: theme.danger, textAlign: "center", padding: spacing.sm },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  modalTitle: { color: theme.text, fontSize: 18, fontWeight: "800" },
+  venueCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: theme.card,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  venueCardName: { color: theme.text, fontWeight: "800", fontSize: 15 },
+  venueCardCategory: { color: theme.textDim, fontSize: 12, marginTop: 2 },
 });

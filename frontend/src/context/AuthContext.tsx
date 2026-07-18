@@ -13,6 +13,9 @@ export type VibeUser = {
   orientation?: string;
   vibe_status?: string;
   relationship_goal?: string;
+  instagram_handle?: string;
+  spotify_favorite_artist?: string;
+  spotify_favorite_song?: string;
   interests?: string[];
   music_tags?: string[];
   photos?: string[];
@@ -23,6 +26,7 @@ export type VibeUser = {
   is_premium?: boolean;
   is_admin?: boolean;
   is_email_verified?: boolean;
+  is_verified?: boolean;
   handle_changes_left?: number;
   boosted_until?: string;
   music_compatibility_pct?: number;
@@ -40,6 +44,7 @@ type Ctx = {
   updateProfile: (patch: Partial<VibeUser> & { location?: any }) => Promise<void>;
   sendVerificationCode: () => Promise<string>;
   verifyEmailCode: (code: string) => Promise<void>;
+  verifySelfie: (base64Selfie: string) => Promise<void>;
   verifyPayment: (method?: string, txId?: string) => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -138,6 +143,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.user);
   };
 
+  const verifySelfie = async (base64Selfie: string) => {
+    const res = await api<{ message: string; user: VibeUser }>("/auth/verify-selfie", {
+      method: "POST",
+      body: JSON.stringify({ selfie_image: base64Selfie }),
+    });
+    setUser(res.user);
+  };
+
   const verifyPayment = async (method = "card", txId?: string) => {
     const res = await api<{ message: string; user: VibeUser }>("/subscription/verify-payment", {
       method: "POST",
@@ -181,6 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       updateProfile,
       sendVerificationCode,
       verifyEmailCode,
+      verifySelfie,
       verifyPayment,
       logout,
       deleteAccount,

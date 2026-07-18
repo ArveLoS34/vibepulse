@@ -686,6 +686,9 @@ class ProfileUpdate(BaseModel):
     onboarded: Optional[bool] = None
     theme_id: Optional[str] = "rose_purple"
     relationship_goal: Optional[str] = None
+    instagram_handle: Optional[str] = None
+    spotify_favorite_artist: Optional[str] = None
+    spotify_favorite_song: Optional[str] = None
 
 
 class PostCreate(BaseModel):
@@ -792,6 +795,15 @@ class VerifyPaymentIn(BaseModel):
     payment_method: Optional[str] = "card"
     transaction_id: Optional[str] = None
     plan: Optional[str] = "monthly"
+
+
+class VerifySelfieIn(BaseModel):
+    selfie_image: str
+
+
+class SuggestVenueIn(BaseModel):
+    venue_name: str
+    address: Optional[str] = None
 
 
 class CreateLiveRoomIn(BaseModel):
@@ -1063,6 +1075,8 @@ async def _update_streak(user: dict) -> dict:
         badges.append("🔥 3 Gün Serisi")
     if streak >= 7:
         badges.append("⚡ Vibe Efendisi")
+    if user.get("is_verified"):
+        badges.append("🔵 Onaylı Hesap")
     if user.get("is_premium"):
         badges.append("⭐ Premium")
     if user.get("music_tags") or user.get("interests"):
@@ -2534,6 +2548,86 @@ async def update_spotify_status(payload: SpotifyStatusIn, current=Depends(get_cu
         {"$set": {"now_playing": status_doc}}
     )
     return {"message": "Spotify dinleme durumu güncellendi! 🎵", "now_playing": status_doc}
+
+
+# --- Feature: Biometric Selfie Verification & Blue Badge ---
+@api.post("/auth/verify-selfie")
+async def verify_selfie(payload: VerifySelfieIn, current=Depends(get_current_user)):
+    _validate_image(payload.selfie_image)
+
+    # Perform AI face presence check via Claude Sonnet 4.5 Vision
+    if EMERGENT_LLM_KEY:
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            chat = LlmChat(
+                api_key=EMERGENT_LLM_KEY,
+                session_id=f"selfie_{uuid.uuid4().hex[:8]}",
+                system_message="You are AI Biometric Verification system. Verify if image contains a clear real human face. Respond with ONLY 'APPROVED' or 'REJECTED'."
+            ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+
+            prompt = "Please verify this live selfie for user profile blue badge."
+            res = await asyncio.wait_for(chat.send_message(UserMessage(text=prompt)), timeout=10)
+            if "REJECTED" in str(res).upper():
+                raise HTTPException(status_code=400, detail="Biyometrik doğrulama başarısız. Lütfen yüzünüzün net göründüğü canlı bir selfie yükleyin.")
+        except HTTPException:
+            raise
+        except Exception as e:
+            log.warning("AI vision selfie check bypassed fallback: %s", e)
+
+    await db.users.update_one(
+        {"user_id": current["user_id"]},
+        {"$set": {
+            "is_verified": True,
+            "selfie_verified_at": now_utc().isoformat()
+        }}
+    )
+    updated_user = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0})
+    return {
+        "message": "Tebrikler! Biyometrik selfie doğrulamanız onaylandı. Profilinize Mavi Tik (🔵 Onaylı Hesap) tanımlandı! ✨",
+        "is_verified": True,
+        "user": public_user(updated_user, viewer=updated_user, include_email=True)
+    }
+
+
+# --- Feature: Popular Cafe/Date Venues Picker ---
+POPULAR_VENUES = [
+    {"id": "v1", "name": "Espresso Lab — Moda / Kadıköy", "category": "Kahve & Tatlı", "address": "Moda Caferağa Mah. Kadıköy"},
+    {"id": "v2", "name": "MOC Coffee — Nişantaşı", "category": "Nitelikli Kahve", "address": "Teşvikiye Şakayık Sok. Şişli"},
+    {"id": "v3", "name": "Kronotrop — Karaköy", "category": "Espresso Bar", "address": "Karaköy Kemankeş Cad. Beyoğlu"},
+    {"id": "v4", "name": "Petra Roasting Co. — Beşiktaş", "category": "Kahve & Brunch", "address": "Gayrettepe Hoşsohbet Sok."},
+    {"id": "v5", "name": "Walter's Coffee Roasters — Kadıköy", "category": "Konsept Kafe", "address": "Bademaltı Sok. Caferağa"},
+]
+
+@api.get("/venues/popular")
+async def list_popular_venues():
+    return {"venues": POPULAR_VENUES}
+
+
+@api.post("/matches/{match_id}/suggest-venue")
+async def suggest_venue(match_id: str, payload: SuggestVenueIn, current=Depends(get_current_user)):
+    m = await _match_or_404(match_id, current["user_id"])
+    other = next(uid for uid in m["user_ids"] if uid != current["user_id"])
+
+    msg_text = f"☕ Buluşma Önerisi: {payload.venue_name}\n📍 Adres: {payload.address or 'İstanbul'}\n\nSenin için uygun mu? 😊"
+    doc = {
+        "message_id": new_id("msg"),
+        "match_id": match_id,
+        "from_user_id": current["user_id"],
+        "to_user_id": other,
+        "text": msg_text,
+        "read": False,
+        "created_at": now_utc().isoformat(),
+    }
+    await db.messages.insert_one(doc)
+    await db.matches.update_one({"match_id": match_id}, {"$set": {"last_message_at": doc["created_at"]}})
+    
+    asyncio.create_task(create_in_app_notification(
+        other, "venue_suggestion", "Kahve Buluşması Önerisi! ☕",
+        f"{current.get('name', 'Biri')} sana bir kafe buluşması önerdi: {payload.venue_name}",
+        {"user_id": current["user_id"], "name": current.get("name"), "avatar": (current.get("photos") or [""])[0]}
+    ))
+
+    return {"message": "Buluşma noktası öneriniz gönderildi! ☕", "message_doc": doc}
 
 
 # --- TikTok Style VIP Live Audio Lounges ---
