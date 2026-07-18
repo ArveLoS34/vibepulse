@@ -222,6 +222,10 @@ class SmartCollection:
                         if not all(x in (d.get(k) or []) for x in v["$all"]):
                             match = False
                             break
+                    elif isinstance(d.get(k), list):
+                        if v not in d.get(k):
+                            match = False
+                            break
                     elif d.get(k) != v:
                         match = False
                         break
@@ -714,6 +718,10 @@ class ReportCreate(BaseModel):
     target_user_id: Optional[str] = None
     post_id: Optional[str] = None
     reason: str = Field(min_length=3, max_length=300)
+
+
+class StoryReplyIn(BaseModel):
+    reply_text: str = Field(min_length=1, max_length=280)
 
 
 class StoryCreate(BaseModel):
@@ -1975,6 +1983,114 @@ async def list_stories(current=Depends(get_current_user)):
 
     return {"stories_feed": list(grouped.values())}
 
+@api.get("/stories/user/{target_user_id}")
+async def get_user_active_stories(target_user_id: str, current=Depends(get_current_user)):
+    now_iso = now_utc().isoformat()
+    raw = await db.stories.find(
+        {"user_id": target_user_id, "expires_at": {"$gt": now_iso}},
+        {"_id": 0}
+    ).sort("created_at", 1).to_list(20)
+
+    if not raw:
+        return {"has_active_story": False, "stories_group": None}
+
+    author = raw[0].get("author", {})
+    return {
+        "has_active_story": True,
+        "stories_group": {
+            "user": author,
+            "stories": raw
+        }
+    }
+
+
+@api.delete("/stories/{story_id}")
+async def delete_story(story_id: str, current=Depends(get_current_user)):
+    st = await db.stories.find_one({"story_id": story_id, "user_id": current["user_id"]})
+    if not st:
+        raise HTTPException(status_code=404, detail="Hikaye bulunamadı veya silme yetkiniz yok.")
+    await db.stories.delete_one({"story_id": story_id})
+    return {"message": "Hikaye başarıyla silindi. 🗑️"}
+
+
+@api.post("/stories/{story_id}/like")
+async def like_story(story_id: str, current=Depends(get_current_user)):
+    st = await db.stories.find_one({"story_id": story_id})
+    if not st:
+        raise HTTPException(status_code=404, detail="Hikaye bulunamadı.")
+
+    likes = st.get("likes", [])
+    user_id = current["user_id"]
+
+    if user_id in likes:
+        await db.stories.update_one({"story_id": story_id}, {"$pull": {"likes": user_id}})
+        return {"liked": False}
+
+    await db.stories.update_one({"story_id": story_id}, {"$addToSet": {"likes": user_id}})
+
+    author_id = st.get("user_id")
+    if author_id and author_id != user_id:
+        asyncio.create_task(create_in_app_notification(
+            author_id, "story_like", "Hikayen Beğenildi! 💖",
+            f"{current.get('name', 'Biri')} senin 24 Sa Vibe hikayeni beğendi.",
+            {"user_id": user_id, "name": current.get("name"), "avatar": (current.get("photos") or [""])[0]}
+        ))
+
+    return {"liked": True}
+
+
+@api.post("/stories/{story_id}/reply")
+async def reply_story(story_id: str, payload: StoryReplyIn, current=Depends(get_current_user)):
+    st = await db.stories.find_one({"story_id": story_id})
+    if not st:
+        raise HTTPException(status_code=404, detail="Hikaye bulunamadı.")
+
+    author_id = st["user_id"]
+    if author_id == current["user_id"]:
+        raise HTTPException(status_code=400, detail="Kendi hikayenize yanıt veremezsiniz.")
+
+    safe, reason = await moderate_text(payload.reply_text, current["user_id"])
+    if not safe:
+        raise HTTPException(status_code=400, detail=f"Yanıt engellendi: {reason}")
+
+    match_doc = await db.matches.find_one({"user_ids": {"$all": [current["user_id"], author_id]}})
+    if not match_doc:
+        match_doc = {
+            "match_id": new_id("mch"),
+            "user_ids": sorted([current["user_id"], author_id]),
+            "created_at": now_utc().isoformat(),
+            "last_message_at": now_utc().isoformat(),
+            "has_messages": True
+        }
+        await db.matches.insert_one(match_doc)
+    else:
+        await db.matches.update_one(
+            {"match_id": match_doc["match_id"]},
+            {"$set": {"has_messages": True, "last_message_at": now_utc().isoformat()}}
+        )
+
+    story_snippet = f"\"{st.get('text')[:30]}\"..." if st.get("text") else "📷 Fotoğraflı Hikaye"
+    msg_doc = {
+        "message_id": new_id("msg"),
+        "match_id": match_doc["match_id"],
+        "from_user_id": current["user_id"],
+        "to_user_id": author_id,
+        "text": f"🌟 Hikayene Yanıt Verdi ({story_snippet}):\n\n{payload.reply_text.strip()}",
+        "image": "",
+        "read": False,
+        "created_at": now_utc().isoformat()
+    }
+    await db.messages.insert_one(msg_doc)
+
+    asyncio.create_task(create_in_app_notification(
+        author_id, "story_reply", "Hikayene Yanıt Geldi! 💬",
+        f"{current.get('name', 'Biri')}: {payload.reply_text.strip()}",
+        {"user_id": current["user_id"], "name": current.get("name"), "avatar": (current.get("photos") or [""])[0]}
+    ))
+
+    return {"message": "Yanıtınız özel mesaj olarak iletildi! 📩", "match_id": match_doc["match_id"]}
+
+
 
 # --- Vibe Quiz Matches ---
 @api.post("/quiz/answers")
@@ -2466,115 +2582,6 @@ async def _startup():
         except Exception as e:
             log.warning("Could not connect to Redis: %s", e)
             redis_client = None
-
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-
-SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
-SMTP_USER = os.environ.get("SMTP_USER", "")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
-SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER or "noreply@vibepulse.app")
-
-OFFICIAL_IBAN = os.environ.get("OFFICIAL_IBAN", "TR88 0006 7010 0000 0076 1583 55")
-OFFICIAL_BANK_NAME = os.environ.get("OFFICIAL_BANK_NAME", "Yapı Kredi Bankası (YAPIKREDİ)")
-OFFICIAL_ACCOUNT_HOLDER = os.environ.get("OFFICIAL_ACCOUNT_HOLDER", "RECEP ALİ KESER")
-
-
-async def send_email_async(to_email: str, subject: str, html_content: str) -> bool:
-    resend_key = os.environ.get("RESEND_API_KEY", "")
-    if resend_key:
-        try:
-            async with httpx.AsyncClient(timeout=10) as hx:
-                resp = await hx.post(
-                    "https://api.resend.com/emails",
-                    headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
-                    json={"from": "VibePulse <onboarding@resend.dev>", "to": [to_email], "subject": subject, "html": html_content}
-                )
-                if resp.status_code in (200, 201, 202):
-                    log.info("E-posta Resend API ile başarıyla gönderildi (%s)", to_email)
-                    return True
-        except Exception as e:
-            log.warning("Resend API e-posta gönderimi başarısız: %s", e)
-
-    if SMTP_USER and SMTP_PASSWORD:
-        def _send():
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"] = f"VibePulse App <{SMTP_FROM}>"
-            msg["To"] = to_email
-            msg.attach(MIMEText(html_content, "html", "utf-8"))
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
-                server.starttls()
-                server.login(SMTP_USER, SMTP_PASSWORD)
-                server.sendmail(SMTP_FROM, [to_email], msg.as_string())
-            return True
-
-        try:
-            await asyncio.to_thread(_send)
-            log.info("E-posta SMTP ile başarıyla gönderildi (%s)", to_email)
-            return True
-        except Exception as e:
-            log.error("SMTP gönderimi başarısız (%s): %s", to_email, e)
-
-    log.warning("SMTP veya E-posta API kimlik bilgisi yok (%s).", to_email)
-    return False
-
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-
-SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
-SMTP_USER = os.environ.get("SMTP_USER", "")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
-SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER or "noreply@vibepulse.app")
-
-OFFICIAL_IBAN = os.environ.get("OFFICIAL_IBAN", "TR88 0006 7010 0000 0076 1583 55")
-OFFICIAL_BANK_NAME = os.environ.get("OFFICIAL_BANK_NAME", "Yapı Kredi Bankası (YAPIKREDİ)")
-OFFICIAL_ACCOUNT_HOLDER = os.environ.get("OFFICIAL_ACCOUNT_HOLDER", "RECEP ALİ KESER")
-
-
-async def send_email_async(to_email: str, subject: str, html_content: str) -> bool:
-    resend_key = os.environ.get("RESEND_API_KEY", "")
-    if resend_key:
-        try:
-            async with httpx.AsyncClient(timeout=10) as hx:
-                resp = await hx.post(
-                    "https://api.resend.com/emails",
-                    headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
-                    json={"from": "VibePulse <onboarding@resend.dev>", "to": [to_email], "subject": subject, "html": html_content}
-                )
-                if resp.status_code in (200, 201, 202):
-                    log.info("E-posta Resend API ile başarıyla gönderildi (%s)", to_email)
-                    return True
-        except Exception as e:
-            log.warning("Resend API e-posta gönderimi başarısız: %s", e)
-
-    if SMTP_USER and SMTP_PASSWORD:
-        def _send():
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"] = f"VibePulse App <{SMTP_FROM}>"
-            msg["To"] = to_email
-            msg.attach(MIMEText(html_content, "html", "utf-8"))
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
-                server.starttls()
-                server.login(SMTP_USER, SMTP_PASSWORD)
-                server.sendmail(SMTP_FROM, [to_email], msg.as_string())
-            return True
-
-        try:
-            await asyncio.to_thread(_send)
-            log.info("E-posta SMTP ile başarıyla gönderildi (%s)", to_email)
-            return True
-        except Exception as e:
-            log.error("SMTP gönderimi başarısız (%s): %s", to_email, e)
-
-    log.warning("SMTP veya E-posta API kimlik bilgisi yok (%s).", to_email)
-    return False
-
 
     try:
         await db.users.create_index("email", unique=True)

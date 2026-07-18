@@ -33,6 +33,8 @@ export default function FeedScreen() {
   const [storyBusy, setStoryBusy] = useState(false);
   const [activeStoryGroup, setActiveStoryGroup] = useState<any | null>(null);
   const [activeStoryIdx, setActiveStoryIdx] = useState(0);
+  const [storyReplyText, setStoryReplyText] = useState("");
+  const [storyReplyBusy, setStoryReplyBusy] = useState(false);
 
   // Notification Center state
   const [notifModalOpen, setNotifModalOpen] = useState(false);
@@ -202,9 +204,51 @@ export default function FeedScreen() {
     }
   };
 
+  const deleteActiveStory = async () => {
+    if (!activeStoryGroup || !activeStoryGroup.stories[activeStoryIdx]) return;
+    const stId = activeStoryGroup.stories[activeStoryIdx].story_id;
+    try {
+      await api(`/stories/${stId}`, { method: "DELETE" });
+      alert("Hikaye silindi. 🗑️");
+      setActiveStoryGroup(null);
+      load();
+    } catch (e: any) {
+      alert(e?.message || "Hikaye silinemedi");
+    }
+  };
+
+  const toggleLikeActiveStory = async () => {
+    if (!activeStoryGroup || !activeStoryGroup.stories[activeStoryIdx]) return;
+    const stId = activeStoryGroup.stories[activeStoryIdx].story_id;
+    try {
+      await api(`/stories/${stId}/like`, { method: "POST" });
+      alert("Hikaye beğenildi! 💖");
+    } catch {}
+  };
+
+  const sendStoryReply = async () => {
+    if (!activeStoryGroup || !activeStoryGroup.stories[activeStoryIdx] || !storyReplyText.trim()) return;
+    const stId = activeStoryGroup.stories[activeStoryIdx].story_id;
+    setStoryReplyBusy(true);
+    try {
+      const res = await api<{ message: string; match_id: string }>(`/stories/${stId}/reply`, {
+        method: "POST",
+        body: JSON.stringify({ reply_text: storyReplyText.trim() }),
+      });
+      alert(res.message || "Yanıtınız özel mesaj olarak iletildi! 📩");
+      setStoryReplyText("");
+      setActiveStoryGroup(null);
+    } catch (e: any) {
+      alert(e?.message || "Yanıt iletilemedi");
+    } finally {
+      setStoryReplyBusy(false);
+    }
+  };
+
   const openStoryViewer = (group: any) => {
     setActiveStoryGroup(group);
     setActiveStoryIdx(0);
+    setStoryReplyText("");
   };
 
   const onRefresh = () => {
@@ -458,6 +502,14 @@ export default function FeedScreen() {
                   <Text style={{ color: "#fff", fontWeight: "800", fontSize: 15 }}>{activeStoryGroup.user?.name}</Text>
                   <Text style={{ color: theme.textDim, fontSize: 12 }}>@{activeStoryGroup.user?.handle}</Text>
                 </View>
+
+                {/* Delete Story Button if Owner */}
+                {activeStoryGroup.user?.user_id === user?.user_id ? (
+                  <TouchableOpacity onPress={deleteActiveStory} style={{ padding: 6, marginRight: 8 }}>
+                    <Ionicons name="trash-outline" size={22} color={theme.danger} />
+                  </TouchableOpacity>
+                ) : null}
+
                 <TouchableOpacity onPress={() => setActiveStoryGroup(null)} style={{ padding: 6 }}>
                   <Ionicons name="close" size={26} color="#fff" />
                 </TouchableOpacity>
@@ -481,33 +533,56 @@ export default function FeedScreen() {
                 ) : null}
               </View>
 
-              {/* Footer navigation */}
-              <View style={styles.storyFooter}>
-                <TouchableOpacity
-                  disabled={activeStoryIdx === 0}
-                  onPress={() => setActiveStoryIdx((i) => i - 1)}
-                  style={[styles.storyNavBtn, activeStoryIdx === 0 && { opacity: 0.3 }]}
-                >
-                  <Ionicons name="chevron-back" size={24} color="#fff" />
-                  <Text style={{ color: "#fff", fontWeight: "700" }}>Önceki</Text>
-                </TouchableOpacity>
+              {/* Footer Reply & Like Box */}
+              {activeStoryGroup.user?.user_id !== user?.user_id ? (
+                <View style={styles.storyReplyRow}>
+                  <TextInput
+                    value={storyReplyText}
+                    onChangeText={setStoryReplyText}
+                    placeholder="Hikayeye özel mesaj gönder..."
+                    placeholderTextColor={theme.textMuted}
+                    style={styles.storyReplyInput}
+                  />
+                  <TouchableOpacity
+                    onPress={sendStoryReply}
+                    disabled={storyReplyBusy || !storyReplyText.trim()}
+                    style={styles.storySendBtn}
+                  >
+                    <Ionicons name="paper-plane" size={18} color="#fff" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={toggleLikeActiveStory} style={styles.storyLikeBtn}>
+                    <Ionicons name="heart" size={22} color={theme.rose} />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                /* Footer Navigation for Owner */
+                <View style={styles.storyFooter}>
+                  <TouchableOpacity
+                    disabled={activeStoryIdx === 0}
+                    onPress={() => setActiveStoryIdx((i) => i - 1)}
+                    style={[styles.storyNavBtn, activeStoryIdx === 0 && { opacity: 0.3 }]}
+                  >
+                    <Ionicons name="chevron-back" size={24} color="#fff" />
+                    <Text style={{ color: "#fff", fontWeight: "700" }}>Önceki</Text>
+                  </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={() => {
-                    if (activeStoryIdx < activeStoryGroup.stories.length - 1) {
-                      setActiveStoryIdx((i) => i + 1);
-                    } else {
-                      setActiveStoryGroup(null);
-                    }
-                  }}
-                  style={styles.storyNavBtn}
-                >
-                  <Text style={{ color: "#fff", fontWeight: "700" }}>
-                    {activeStoryIdx < activeStoryGroup.stories.length - 1 ? "Sonraki" : "Kapat"}
-                  </Text>
-                  <Ionicons name="chevron-forward" size={24} color="#fff" />
-                </TouchableOpacity>
-              </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (activeStoryIdx < activeStoryGroup.stories.length - 1) {
+                        setActiveStoryIdx((i) => i + 1);
+                      } else {
+                        setActiveStoryGroup(null);
+                      }
+                    }}
+                    style={styles.storyNavBtn}
+                  >
+                    <Text style={{ color: "#fff", fontWeight: "700" }}>
+                      {activeStoryIdx < activeStoryGroup.stories.length - 1 ? "Sonraki" : "Kapat"}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={24} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              )}
             </>
           )}
         </SafeAreaView>
@@ -758,6 +833,10 @@ const styles = StyleSheet.create({
   storyCardText: { color: "#fff", fontSize: 20, fontWeight: "800", textAlign: "center", lineHeight: 28 },
   storyFooter: { flexDirection: "row", justifyContent: "space-between", padding: spacing.lg },
   storyNavBtn: { flexDirection: "row", alignItems: "center", gap: 6, padding: 10 },
+  storyReplyRow: { flexDirection: "row", alignItems: "center", gap: 8, padding: spacing.lg },
+  storyReplyInput: { flex: 1, backgroundColor: theme.card, color: theme.text, paddingHorizontal: 16, paddingVertical: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: theme.border, fontSize: 14 },
+  storySendBtn: { backgroundColor: theme.rose, width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
+  storyLikeBtn: { backgroundColor: "rgba(244,63,94,0.15)", width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(244,63,94,0.4)" },
   notifCard: {
     flexDirection: "row",
     alignItems: "center",

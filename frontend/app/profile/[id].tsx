@@ -6,6 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/src/lib/api";
 import { useTranslation } from "@/src/i18n/LanguageContext";
+import { useAuth } from "@/src/context/AuthContext";
 import { PostCard, Post } from "@/src/components/PostCard";
 import { Avatar } from "@/src/components/Avatar";
 import { theme, radius, spacing } from "@/src/lib/theme";
@@ -15,12 +16,20 @@ export default function PublicProfile() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t } = useTranslation();
+  const { user: me } = useAuth();
   const [user, setUser] = useState<(VibeUser & { top_post?: any; now_playing?: any }) | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [askOpen, setAskOpen] = useState(false);
   const [questionText, setQuestionText] = useState("");
   const [askBusy, setAskBusy] = useState(false);
+
+  // Active Story state for this profile
+  const [userStoryGroup, setUserStoryGroup] = useState<any | null>(null);
+  const [storyModalOpen, setStoryModalOpen] = useState(false);
+  const [activeStoryIdx, setActiveStoryIdx] = useState(0);
+  const [replyText, setReplyText] = useState("");
+  const [replyBusy, setReplyBusy] = useState(false);
 
   const [aiReportModal, setAiReportModal] = useState(false);
   const [aiReportData, setAiReportData] = useState<any>(null);
@@ -47,12 +56,48 @@ export default function PublicProfile() {
       setUser(u.user);
       const p = await api<{ posts: Post[] }>(`/posts/user/${id}`);
       setPosts(p.posts);
+
+      // Check active stories for this profile
+      try {
+        const stRes = await api<{ has_active_story: boolean; stories_group: any }>(`/stories/user/${id}`);
+        if (stRes.has_active_story && stRes.stories_group) {
+          setUserStoryGroup(stRes.stories_group);
+        }
+      } catch {}
     } finally {
       setLoading(false);
     }
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  const toggleLikeActiveStory = async () => {
+    if (!userStoryGroup || !userStoryGroup.stories[activeStoryIdx]) return;
+    const stId = userStoryGroup.stories[activeStoryIdx].story_id;
+    try {
+      await api(`/stories/${stId}/like`, { method: "POST" });
+      alert("Hikaye beğenildi! 💖");
+    } catch {}
+  };
+
+  const sendStoryReply = async () => {
+    if (!userStoryGroup || !userStoryGroup.stories[activeStoryIdx] || !replyText.trim()) return;
+    const stId = userStoryGroup.stories[activeStoryIdx].story_id;
+    setReplyBusy(true);
+    try {
+      const res = await api<{ message: string; match_id: string }>(`/stories/${stId}/reply`, {
+        method: "POST",
+        body: JSON.stringify({ reply_text: replyText.trim() }),
+      });
+      alert(res.message || "Yanıtınız özel mesaj olarak iletildi! 📩");
+      setReplyText("");
+      setStoryModalOpen(false);
+    } catch (e: any) {
+      alert(e?.message || "Yanıt iletilemedi");
+    } finally {
+      setReplyBusy(false);
+    }
+  };
 
   const sendVibe = async () => {
     if (!user) return;
@@ -135,7 +180,19 @@ export default function PublicProfile() {
             style={styles.banner}
           />
           <View style={styles.head}>
-            <Avatar uri={user.photos?.[0]} name={user.name || ""} size={110} ring />
+            <TouchableOpacity
+              onPress={() => userStoryGroup ? setStoryModalOpen(true) : null}
+              disabled={!userStoryGroup}
+              style={{ position: "relative" }}
+            >
+              <Avatar uri={user.photos?.[0]} name={user.name || ""} size={110} ring={!!userStoryGroup} />
+              {userStoryGroup ? (
+                <View style={styles.storyBadge}>
+                  <Text style={styles.storyBadgeText}>24Sa Hikaye</Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+
             <Text style={styles.name}>
               {user.name}{user.age ? <Text style={styles.age}>, {user.age}</Text> : null}
             </Text>
@@ -254,6 +311,77 @@ export default function PublicProfile() {
         </ScrollView>
       )}
 
+      {/* Profile Active Story Modal */}
+      <Modal visible={storyModalOpen} animationType="fade" onRequestClose={() => setStoryModalOpen(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#0A0A0C", justifyContent: "space-between" }}>
+          {userStoryGroup && (
+            <>
+              {/* Progress Bar */}
+              <View style={styles.storyBarRow}>
+                {userStoryGroup.stories.map((st: any, idx: number) => (
+                  <View key={idx} style={[styles.storyBar, idx <= activeStoryIdx ? { backgroundColor: theme.rose } : null]} />
+                ))}
+              </View>
+
+              {/* Author Row */}
+              <View style={styles.storyAuthorRow}>
+                <Avatar uri={userStoryGroup.user?.avatar} name={userStoryGroup.user?.name || ""} size={42} />
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={{ color: "#fff", fontWeight: "800", fontSize: 15 }}>{userStoryGroup.user?.name}</Text>
+                  <Text style={{ color: theme.textDim, fontSize: 12 }}>@{userStoryGroup.user?.handle}</Text>
+                </View>
+
+                <TouchableOpacity onPress={toggleLikeActiveStory} style={{ padding: 8 }}>
+                  <Ionicons name="heart" size={24} color={theme.rose} />
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => setStoryModalOpen(false)} style={{ padding: 6 }}>
+                  <Ionicons name="close" size={26} color="#fff" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Story Content */}
+              <View style={styles.storyBody}>
+                {userStoryGroup.stories[activeStoryIdx]?.image ? (
+                  <Image source={{ uri: userStoryGroup.stories[activeStoryIdx].image }} style={styles.storyFullMedia} />
+                ) : null}
+
+                {userStoryGroup.stories[activeStoryIdx]?.text ? (
+                  <LinearGradient
+                    colors={["rgba(244,63,94,0.15)", "rgba(139,92,246,0.25)"]}
+                    style={styles.storyCard}
+                  >
+                    <Text style={styles.storyCardText}>
+                      "{userStoryGroup.stories[activeStoryIdx].text}"
+                    </Text>
+                  </LinearGradient>
+                ) : null}
+              </View>
+
+              {/* Story Reply Box */}
+              {me?.user_id !== userStoryGroup.user?.user_id && (
+                <View style={styles.storyReplyBox}>
+                  <TextInput
+                    value={replyText}
+                    onChangeText={setReplyText}
+                    placeholder="Hikayeye özel mesaj gönder..."
+                    placeholderTextColor={theme.textMuted}
+                    style={styles.storyReplyInput}
+                  />
+                  <TouchableOpacity
+                    onPress={sendStoryReply}
+                    disabled={replyBusy || !replyText.trim()}
+                    style={styles.storySendBtn}
+                  >
+                    <Ionicons name="paper-plane" size={20} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
+          )}
+        </SafeAreaView>
+      </Modal>
+
       {/* AI Compatibility Report Modal */}
       <Modal visible={aiReportModal} animationType="slide" onRequestClose={() => setAiReportModal(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -300,6 +428,16 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   banner: { position: "absolute", top: 0, left: 0, right: 0, height: 160 },
   head: { alignItems: "center", paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: spacing.lg },
+  storyBadge: {
+    position: "absolute",
+    bottom: -6,
+    alignSelf: "center",
+    backgroundColor: theme.rose,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+  },
+  storyBadgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
   name: { color: theme.text, fontSize: 26, fontWeight: "900", marginTop: spacing.md, letterSpacing: -0.5 },
   age: { fontWeight: "400", color: theme.textDim },
   handle: { color: theme.textDim, marginTop: 2 },
@@ -413,4 +551,23 @@ const styles = StyleSheet.create({
   vibeBtnText: { color: "#fff", fontWeight: "800", fontSize: 15 },
   section: { color: theme.textDim, fontSize: 12, fontWeight: "800", textTransform: "uppercase", letterSpacing: 1.2, marginBottom: spacing.sm },
   gridPhoto: { width: 130, height: 170, borderRadius: radius.md, backgroundColor: theme.card },
+  storyBarRow: { flexDirection: "row", gap: 4, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  storyBar: { flex: 1, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.2)" },
+  storyAuthorRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  storyBody: { flex: 1, justifyContent: "center", alignItems: "center", padding: spacing.md },
+  storyFullMedia: { width: "100%", height: 380, borderRadius: radius.lg, resizeMode: "contain" },
+  storyCard: {
+    padding: spacing.xl,
+    borderRadius: radius.xl,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(244,63,94,0.4)",
+    marginTop: 12,
+    width: "100%",
+  },
+  storyCardText: { color: "#fff", fontSize: 20, fontWeight: "800", textAlign: "center", lineHeight: 28 },
+  storyReplyBox: { flexDirection: "row", alignItems: "center", gap: 8, padding: spacing.lg },
+  storyReplyInput: { flex: 1, backgroundColor: theme.card, color: theme.text, paddingHorizontal: 16, paddingVertical: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: theme.border, fontSize: 14 },
+  storySendBtn: { backgroundColor: theme.rose, width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
 });
