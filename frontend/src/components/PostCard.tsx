@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { Avatar } from "@/src/components/Avatar";
 import { theme, radius, spacing } from "@/src/lib/theme";
 import { api } from "@/src/lib/api";
+import { useAuth } from "@/src/context/AuthContext";
 
 export type PostAuthor = {
   user_id: string;
@@ -12,6 +13,7 @@ export type PostAuthor = {
   handle: string;
   avatar: string;
   vibe_status?: string;
+  is_founder?: boolean;
 };
 
 export type Post = {
@@ -41,6 +43,7 @@ function timeAgo(iso: string): string {
 
 export function PostCard({ post, onChange }: { post: Post; onChange?: (p: Post) => void }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [liked, setLiked] = React.useState(post.liked_by_me);
   const [count, setCount] = React.useState(post.likes_count);
   const [playingAudio, setPlayingAudio] = React.useState(false);
@@ -49,6 +52,16 @@ export function PostCard({ post, onChange }: { post: Post; onChange?: (p: Post) 
     setLiked(post.liked_by_me);
     setCount(post.likes_count);
   }, [post.liked_by_me, post.likes_count]);
+
+  const deletePost = async () => {
+    try {
+      await api(`/posts/${post.post_id}`, { method: "DELETE" });
+      alert("Gönderi silindi. 🗑️");
+      onChange?.(null as any);
+    } catch (e: any) {
+      alert(e?.message || "Gönderi silinemedi");
+    }
+  };
 
   const toggleAudio = () => {
     if (!post.voice_note) return;
@@ -96,6 +109,9 @@ export function PostCard({ post, onChange }: { post: Post; onChange?: (p: Post) 
     }
   };
 
+  const isFounderAuthor = post.author?.is_founder || post.author?.handle?.toLowerCase().includes("ertackeser");
+  const canDelete = post.author?.user_id === user?.user_id || user?.is_admin;
+
   return (
     <Pressable onPress={goPost} style={styles.wrap} testID={`post-${post.post_id}`}>
       <TouchableOpacity onPress={goProfile}>
@@ -107,12 +123,23 @@ export function PostCard({ post, onChange }: { post: Post; onChange?: (p: Post) 
             <Text style={styles.name} numberOfLines={1}>
               {post.author.name || "İsimsiz"}
             </Text>
+            {isFounderAuthor ? (
+              <View style={styles.founderPill}>
+                <Text style={styles.founderText}>👑 Kurucu</Text>
+              </View>
+            ) : null}
             <Text style={styles.handle} numberOfLines={1}>
               @{post.author.handle}
             </Text>
             <Text style={styles.dot}>·</Text>
             <Text style={styles.time}>{timeAgo(post.created_at)}</Text>
           </TouchableOpacity>
+
+          {canDelete ? (
+            <TouchableOpacity onPress={deletePost} style={{ padding: 4 }}>
+              <Ionicons name="trash-outline" size={18} color={theme.textMuted} />
+            </TouchableOpacity>
+          ) : null}
         </View>
         {post.author.vibe_status ? (
           <View style={styles.vibePill}>
@@ -187,6 +214,15 @@ const styles = StyleSheet.create({
     borderColor: "rgba(244,63,94,0.25)",
   },
   vibeText: { color: theme.rose, fontSize: 11, fontWeight: "600" },
+  founderPill: {
+    backgroundColor: "rgba(245,158,11,0.18)",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.5)",
+  },
+  founderText: { color: "#F59E0B", fontSize: 10, fontWeight: "800" },
   body: { color: theme.text, fontSize: 15.5, lineHeight: 22, marginTop: 4 },
   voicePlayer: {
     flexDirection: "row",

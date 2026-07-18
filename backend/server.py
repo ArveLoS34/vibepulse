@@ -440,6 +440,13 @@ def public_user(user: dict, viewer: Optional[dict] = None, include_email: bool =
     the user (i.e. via /auth/me or /users/me). All other endpoints omit it.
     """
     is_self = bool(viewer and viewer.get("user_id") == user.get("user_id"))
+    email = user.get("email", "")
+    is_founder = bool(email and email.lower() == "ertackeser3453@gmail.com") or user.get("is_founder", False)
+
+    badges = list(user.get("badges", ["🌱 Yeni Vibe"]))
+    if is_founder and "👑 Kurucu" not in badges:
+        badges.insert(0, "👑 Kurucu")
+
     out = {
         "user_id": user["user_id"],
         "name": user.get("name", ""),
@@ -457,12 +464,17 @@ def public_user(user: dict, viewer: Optional[dict] = None, include_email: bool =
         "created_at": user.get("created_at"),
         "is_premium": user.get("is_premium", False),
         "is_admin": user.get("is_admin", False),
+        "is_founder": is_founder,
+        "is_verified": user.get("is_verified", False),
         "boosted_until": user.get("boosted_until"),
         "streak_days": user.get("streak_days", 1),
-        "badges": user.get("badges", ["🌱 Yeni Vibe"]),
+        "badges": badges,
         "now_playing": user.get("now_playing"),
         "theme_id": user.get("theme_id", "rose_purple"),
         "relationship_goal": user.get("relationship_goal", "Sohbet & Vibe 💬"),
+        "instagram_handle": user.get("instagram_handle", ""),
+        "spotify_favorite_artist": user.get("spotify_favorite_artist", ""),
+        "spotify_favorite_song": user.get("spotify_favorite_song", ""),
         "is_email_verified": user.get("is_email_verified", False),
     }
     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -1168,6 +1180,19 @@ async def create_post(payload: PostCreate, current=Depends(get_current_user)):
     await db.posts.insert_one(doc)
     doc.pop("_id", None)
     return {"post": _hydrate_post(doc, current, current)}
+
+
+@api.delete("/posts/{post_id}")
+async def delete_post(post_id: str, current=Depends(get_current_user)):
+    post = await db.posts.find_one({"post_id": post_id})
+    if not post:
+        raise HTTPException(status_code=404, detail="Gönderi bulunamadı.")
+    if post["user_id"] != current["user_id"] and not current.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Bu gönderiyi silme yetkiniz yok.")
+
+    await db.posts.delete_one({"post_id": post_id})
+    await db.comments.delete_many({"post_id": post_id})
+    return {"message": "Gönderi başarıyla silindi. 🗑️"}
 
 
 def _hydrate_post(post: dict, author: dict, viewer: dict) -> dict:
@@ -2186,6 +2211,41 @@ async def list_notifications(current=Depends(get_current_user)):
 async def mark_notifications_read(current=Depends(get_current_user)):
     await db.notifications.update_many({"user_id": current["user_id"], "read": False}, {"$set": {"read": True}})
     return {"message": "Tüm bildirimler okundu olarak işaretlendi. ✅"}
+
+
+@api.delete("/notifications/clear-read")
+async def clear_read_notifications(current=Depends(get_current_user)):
+    await db.notifications.delete_many({"user_id": current["user_id"], "read": True})
+    return {"message": "Okunan tüm bildirimler temizlendi. 🗑️"}
+
+
+@api.get("/admin/users")
+async def list_admin_users(
+    current=Depends(get_current_user),
+    filter: Optional[str] = Query("all")
+):
+    if not current.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Sadece yöneticiler erişebilir.")
+
+    q = {}
+    if filter == "vip":
+        q["is_premium"] = True
+
+    users = await db.users.find(q, {"_id": 0, "password": 0}).sort("created_at", -1).to_list(200)
+    out = []
+    for u in users:
+        email = u.get("email", "")
+        out.append({
+            "user_id": u["user_id"],
+            "name": u.get("name", "İsimsiz"),
+            "handle": u.get("handle", ""),
+            "email": email,
+            "is_premium": u.get("is_premium", False),
+            "is_admin": u.get("is_admin", False),
+            "is_founder": bool(email and email.lower() == "ertackeser3453@gmail.com") or u.get("is_founder", False),
+            "created_at": u.get("created_at"),
+        })
+    return {"users": out}
 
 
 @api.get("/admin/stats")

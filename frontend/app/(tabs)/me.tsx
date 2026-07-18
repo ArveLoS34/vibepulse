@@ -82,6 +82,20 @@ export default function MeScreen() {
   const [targetEmail, setTargetEmail] = useState("");
   const [adminStatsData, setAdminStatsData] = useState<any>(null);
   const [promoteBusy, setPromoteBusy] = useState(false);
+  const [userListModalOpen, setUserListModalOpen] = useState(false);
+  const [adminUsers, setAdminUsers] = useState<any[]>([]);
+  const [userListTitle, setUserListTitle] = useState("");
+
+  const fetchAdminUsers = async (filter: "all" | "vip") => {
+    try {
+      setUserListTitle(filter === "vip" ? "⭐ Kayıtlı VIP Üyeler" : "👥 Tüm Kayıtlı Üyeler");
+      const res = await api<{ users: any[] }>(`/admin/users?filter=${filter}`);
+      setAdminUsers(res.users || []);
+      setUserListModalOpen(true);
+    } catch {
+      alert("Kullanıcı listesi alınamadı.");
+    }
+  };
 
   const openAdminConsole = async () => {
     try {
@@ -170,6 +184,11 @@ export default function MeScreen() {
           <Text style={styles.name}>
             {user.name} {user.age ? <Text style={styles.age}>, {user.age}</Text> : null}
           </Text>
+          {(user.is_founder || user.email?.toLowerCase() === "ertackeser3453@gmail.com") ? (
+            <View style={styles.founderBanner}>
+              <Text style={styles.founderBannerText}>👑 VibePulse Kurucusu & Sahibi</Text>
+            </View>
+          ) : null}
           <Text style={styles.handle}>@{user.handle}</Text>
           
           {/* Email verification indicator */}
@@ -429,18 +448,18 @@ export default function MeScreen() {
           <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}>
             {adminStatsData && (
               <View style={styles.statsGrid}>
-                <View style={styles.statCard}>
+                <TouchableOpacity onPress={() => fetchAdminUsers("all")} style={styles.statCard}>
                   <Text style={styles.statVal}>{adminStatsData.total_users}</Text>
-                  <Text style={styles.statLbl}>Kullanıcı</Text>
-                </View>
+                  <Text style={styles.statLbl}>Kullanıcı (Tıkla 📋)</Text>
+                </TouchableOpacity>
                 <View style={styles.statCard}>
                   <Text style={styles.statVal}>{adminStatsData.total_posts}</Text>
                   <Text style={styles.statLbl}>Gönderi</Text>
                 </View>
-                <View style={styles.statCard}>
+                <TouchableOpacity onPress={() => fetchAdminUsers("vip")} style={styles.statCard}>
                   <Text style={styles.statVal}>{adminStatsData.premium_users}</Text>
-                  <Text style={styles.statLbl}>VIP Üye</Text>
-                </View>
+                  <Text style={styles.statLbl}>VIP Üye (Tıkla 🌟)</Text>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -501,6 +520,48 @@ export default function MeScreen() {
         </SafeAreaView>
       </Modal>
 
+      {/* Admin Registered Users List Modal */}
+      <Modal visible={userListModalOpen} animationType="slide" onRequestClose={() => setUserListModalOpen(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{userListTitle}</Text>
+            <TouchableOpacity onPress={() => setUserListModalOpen(false)} style={{ padding: 6 }}>
+              <Ionicons name="close" size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+
+          <FlatList
+            data={adminUsers}
+            keyExtractor={(item) => item.user_id}
+            contentContainerStyle={{ padding: spacing.lg, gap: 12 }}
+            renderItem={({ item }) => (
+              <View style={styles.adminUserCard}>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={{ color: theme.text, fontWeight: "800", fontSize: 15 }}>{item.name}</Text>
+                    {item.is_founder ? <Text style={{ color: "#F59E0B", fontSize: 11, fontWeight: "900" }}>👑 Kurucu</Text> : null}
+                    {item.is_admin ? <Text style={{ color: "#10B981", fontSize: 11, fontWeight: "800" }}>🛡️ Admin</Text> : null}
+                    {item.is_premium ? <Text style={{ color: "#F59E0B", fontSize: 11, fontWeight: "800" }}>⭐ VIP</Text> : null}
+                  </View>
+                  <Text style={{ color: theme.cyan, fontSize: 12, fontWeight: "700", marginTop: 2 }}>@{item.handle}</Text>
+                  <Text style={{ color: theme.textDim, fontSize: 12, marginTop: 2 }}>📧 {item.email}</Text>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    setTargetEmail(item.email);
+                    setUserListModalOpen(false);
+                  }}
+                  style={{ backgroundColor: "rgba(244,63,94,0.15)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.pill, borderWidth: 1, borderColor: theme.rose }}
+                >
+                  <Text style={{ color: theme.rose, fontWeight: "700", fontSize: 11 }}>Yetkilendir ✏️</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          />
+        </SafeAreaView>
+      </Modal>
+
       <LanguageSelectorModal visible={langModalOpen} onClose={() => setLangModalOpen(false)} />
     </SafeAreaView>
   );
@@ -536,6 +597,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(244,63,94,0.3)",
   },
+  founderBanner: {
+    marginTop: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(245,158,11,0.2)",
+    borderWidth: 1,
+    borderColor: "#F59E0B",
+  },
+  founderBannerText: { color: "#F59E0B", fontWeight: "900", fontSize: 12 },
   vibeText: { color: theme.rose, fontWeight: "700", fontSize: 13 },
   intentPill: {
     marginTop: 8,
@@ -652,6 +723,16 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: theme.border,
+  },
+  adminUserCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: theme.card,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: theme.border,
+    gap: 12,
   },
   qText: { color: theme.text, fontSize: 15, fontWeight: "700" },
   aBox: { marginTop: 8, backgroundColor: "rgba(244,63,94,0.1)", padding: 8, borderRadius: radius.md },

@@ -12,7 +12,7 @@ import { api } from "@/src/lib/api";
 import { useAuth } from "@/src/context/AuthContext";
 import { theme, radius, spacing } from "@/src/lib/theme";
 
-const HASHTAGS = ["Tüm", "Yazılım", "Urfa", "Müzik", "Kahve", "Gece", "Sanat", "Eğlence"];
+const HASHTAGS = ["Tüm", "Yazılım", "Müzik", "Kahve", "Gece", "Sanat", "Eğlence"];
 
 export default function FeedScreen() {
   const router = useRouter();
@@ -71,6 +71,7 @@ export default function FeedScreen() {
   const [activeStoryIdx, setActiveStoryIdx] = useState(0);
   const [storyReplyText, setStoryReplyText] = useState("");
   const [storyReplyBusy, setStoryReplyBusy] = useState(false);
+  const [viewedStoryUserIds, setViewedStoryUserIds] = useState<string[]>([]);
 
   // Notification Center state
   const [notifModalOpen, setNotifModalOpen] = useState(false);
@@ -185,35 +186,53 @@ export default function FeedScreen() {
 
   const closeActiveLounge = async () => {
     if (!activeLounge) return;
-    if (activeLounge.host_id === user?.user_id || user?.is_admin) {
-      try {
-        await api(`/live-rooms/${activeLounge.room_id}`, { method: "DELETE" });
-      } catch {}
+    if (loungePollRef.current) {
+      clearInterval(loungePollRef.current);
+      loungePollRef.current = null;
     }
+    const targetRoomId = activeLounge.room_id;
+    const isHost = activeLounge.host_id === user?.user_id || user?.is_admin;
     setActiveLounge(null);
     setLoungeChat([]);
     setRaisedHand(false);
+    if (isHost) {
+      try {
+        await api(`/live-rooms/${targetRoomId}`, { method: "DELETE" });
+      } catch {}
+    }
     loadLiveRooms();
   };
 
-  const sendLoungeChat = async () => {
-    if (!loungeMessage.trim() || !activeLounge) return;
-    const msgText = loungeMessage.trim();
-    setLoungeMessage("");
+  const clearReadNotifs = async () => {
     try {
-      const res = await api<{ message: any }>(`/live-rooms/${activeLounge.room_id}/messages`, {
-        method: "POST",
-        body: JSON.stringify({ text: msgText }),
-      });
-      setLoungeChat((prev) => [...prev, res.message]);
-    } catch {
-      const fallback = {
-        id: String(Date.now()),
-        sender: user?.name || user?.handle || "Kullanıcı",
-        text: msgText,
-      };
-      setLoungeChat((prev) => [...prev, fallback]);
+      await api("/notifications/clear-read", { method: "DELETE" });
+      loadNotifications();
+    } catch {}
+  };
+
+  const handleNotifPress = (item: any) => {
+    setNotifModalOpen(false);
+    if (item.actor?.post_id || item.type === "like" || item.type === "comment") {
+      const pId = item.actor?.post_id;
+      if (pId) router.push({ pathname: "/post/[id]", params: { id: pId } });
+    } else if (item.actor?.match_id || item.type === "message" || item.type === "story_reply" || item.type === "venue_suggestion") {
+      const mId = item.actor?.match_id;
+      if (mId) router.push({ pathname: "/chat/[matchId]", params: { matchId: mId } });
+    } else if (item.actor?.user_id) {
+      router.push({ pathname: "/profile/[id]", params: { id: item.actor.user_id } });
     }
+  };
+
+  const openStoryViewer = (group: any) => {
+    if (group.user?.user_id) {
+      setViewedStoryUserIds((prev) => Array.from(new Set([...prev, group.user.user_id])));
+    }
+    const sortedStories = [...(group.stories || [])].sort(
+      (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    setActiveStoryGroup({ ...group, stories: sortedStories });
+    setActiveStoryIdx(0);
+    setStoryReplyText("");
   };
 
   const [speedModalOpen, setSpeedModalOpen] = useState(false);
@@ -414,21 +433,47 @@ export default function FeedScreen() {
           </TouchableOpacity>
 
           {/* User Stories */}
-          {stories.map((st, i) => (
-            <TouchableOpacity key={i} onPress={() => openStoryViewer(st)} style={styles.storyWrap}>
-              <LinearGradient
-                colors={[theme.rose, "#8B5CF6"]}
-                style={styles.storyRing}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+          {stories.map((st, i) => {
+            const isViewed = st.user?.user_id && viewedStoryUserIds.includes(st.user.user_id);
+            return (
+              <TouchableOpacity key={i} onPress={() => openStoryViewer(st)} style={styles.storyWrap}>
+                <LinearGradient
+                  colors={isViewed ? ["#666666", "#CCCCCC"] : [theme.rose, "#8B5CF6"]}
+                  style={styles.storyRing}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Avatar uri={st.user?.avatar} name={st.user?.name || "?"} size={48} />
+                </LinearGradient>
+                <Text style={[styles.storyName, isViewed && { color: theme.textMuted }]} numberOfLines={1}>
+                  {st.user?.name?.split(" ")[0] || "Vibe"}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* B4: Hashtag Chip Bar (Placed directly under Stories) */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.chipBar}
+          contentContainerStyle={{ gap: 8, paddingRight: spacing.md }}
+        >
+          {HASHTAGS.map((tag) => {
+            const active = selectedTag === tag;
+            return (
+              <TouchableOpacity
+                key={tag}
+                onPress={() => setSelectedTag(tag)}
+                style={[styles.chip, active && styles.chipActive]}
               >
-                <Avatar uri={st.user?.avatar} name={st.user?.name || "?"} size={48} />
-              </LinearGradient>
-              <Text style={styles.storyName} numberOfLines={1}>
-                {st.user?.name?.split(" ")[0] || "Vibe"}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                  {tag === "Tüm" ? "Tümü" : `#${tag}`}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
 
         {/* TikTok Style VIP Live Audio Spaces Bar */}
@@ -469,29 +514,6 @@ export default function FeedScreen() {
             ) : null}
           </ScrollView>
         </View>
-
-        {/* B4: Hashtag Chip Bar */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.chipBar}
-          contentContainerStyle={{ gap: 8, paddingRight: spacing.md }}
-        >
-          {HASHTAGS.map((tag) => {
-            const active = selectedTag === tag;
-            return (
-              <TouchableOpacity
-                key={tag}
-                onPress={() => setSelectedTag(tag)}
-                style={[styles.chip, active && styles.chipActive]}
-              >
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                  {tag === "Tüm" ? "Tümü" : `#${tag}`}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
 
         {/* v2 Feature 1: Blind Speed Dating Event Banner */}
         <TouchableOpacity
@@ -803,7 +825,9 @@ export default function FeedScreen() {
                 <Avatar uri={activeStoryGroup.user?.avatar} name={activeStoryGroup.user?.name || ""} size={42} />
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <Text style={{ color: "#fff", fontWeight: "800", fontSize: 15 }}>{activeStoryGroup.user?.name}</Text>
-                  <Text style={{ color: theme.textDim, fontSize: 12 }}>@{activeStoryGroup.user?.handle}</Text>
+                  <Text style={{ color: theme.textDim, fontSize: 12 }}>
+                    @{activeStoryGroup.user?.handle} • {timeAgo(activeStoryGroup.stories[activeStoryIdx]?.created_at)} önce
+                  </Text>
                 </View>
 
                 {/* Delete Story Button if Owner */}
@@ -896,13 +920,16 @@ export default function FeedScreen() {
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>🔔 Bildirim Paneli</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               {unreadNotifsCount > 0 ? (
                 <TouchableOpacity onPress={markNotifsRead} style={styles.readAllBtn}>
-                  <Text style={{ color: theme.rose, fontWeight: "700", fontSize: 12 }}>Tümünü Okundu İşaretle</Text>
+                  <Text style={{ color: theme.rose, fontWeight: "700", fontSize: 11 }}>Tümünü Okundu İşaretle</Text>
                 </TouchableOpacity>
               ) : null}
-              <TouchableOpacity onPress={() => setNotifModalOpen(false)} style={{ padding: 6 }}>
+              <TouchableOpacity onPress={clearReadNotifs} style={styles.clearReadBtn}>
+                <Text style={{ color: theme.cyan, fontWeight: "700", fontSize: 11 }}>Okunanları Sil 🗑️</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setNotifModalOpen(false)} style={{ padding: 4 }}>
                 <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
@@ -924,14 +951,18 @@ export default function FeedScreen() {
               </View>
             }
             renderItem={({ item }) => (
-              <View style={[styles.notifCard, !item.read && styles.notifUnread]}>
+              <TouchableOpacity
+                onPress={() => handleNotifPress(item)}
+                style={[styles.notifCard, !item.read && styles.notifUnread]}
+              >
                 <Avatar uri={item.actor?.avatar} name={item.actor?.name || "Vibe"} size={44} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.notifTitle}>{item.title}</Text>
                   <Text style={styles.notifBody}>{item.body}</Text>
                   <Text style={styles.notifTime}>{timeAgo(item.created_at)}</Text>
                 </View>
-              </View>
+                <Ionicons name="chevron-forward" size={16} color={theme.textDim} />
+              </TouchableOpacity>
             )}
           />
         </SafeAreaView>
@@ -1023,7 +1054,15 @@ const styles = StyleSheet.create({
     borderColor: theme.bg,
   },
   storyName: { color: theme.textDim, fontSize: 11, fontWeight: "600", marginTop: 4, textAlign: "center" },
-  liveSpaceSection: { marginTop: spacing.md, backgroundColor: "rgba(139, 92, 246, 0.08)", padding: 10, borderRadius: radius.lg, borderWidth: 1, borderColor: "rgba(139, 92, 246, 0.25)" },
+  liveSpaceSection: {
+    marginTop: spacing.sm,
+    backgroundColor: "rgba(139, 92, 246, 0.08)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: "rgba(139, 92, 246, 0.25)",
+  },
   liveSpaceSectionTitle: { color: "#8B5CF6", fontSize: 12, fontWeight: "800" },
   startRoomBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: theme.rose },
   startRoomBtnText: { color: "#fff", fontWeight: "800", fontSize: 11 },
@@ -1109,7 +1148,8 @@ const styles = StyleSheet.create({
   catChipActive: { borderColor: theme.rose, backgroundColor: "rgba(244,63,94,0.15)" },
   catChipText: { color: theme.textDim, fontSize: 13, fontWeight: "600" },
   catChipTextActive: { color: theme.rose, fontWeight: "800" },
-  readAllBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: "rgba(244,63,94,0.15)" },
+  readAllBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: "rgba(244,63,94,0.15)" },
+  clearReadBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: "rgba(6,182,212,0.15)" },
   mediaSelectBtn: {
     borderWidth: 2,
     borderStyle: "dashed",

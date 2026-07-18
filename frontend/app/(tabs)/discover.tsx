@@ -39,6 +39,7 @@ export default function DiscoverScreen() {
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDistance, setSelectedDistance] = useState<number | null>(null);
+  const [squadsActive, setSquadsActive] = useState(false);
   const [matchInfo, setMatchInfo] = useState<{ matchId: string; user: Card } | null>(null);
   const pan = useRef(new Animated.ValueXY()).current;
   const [busy, setBusy] = useState(false);
@@ -127,8 +128,18 @@ export default function DiscoverScreen() {
             <Text style={styles.title}>Keşfet</Text>
             <Text style={styles.subtitle}>Vibe'ları oku · Ruh eşini seç</Text>
           </View>
-          <TouchableOpacity onPress={() => alert("Squads Modu: Çiftli eşleşme ve arkadaş grupları aktif! 👯")} style={styles.squadBtn} testID="squads-btn">
-            <Text style={styles.squadText}>👯 Squads</Text>
+          <TouchableOpacity
+            onPress={() => {
+              const next = !squadsActive;
+              setSquadsActive(next);
+              alert(next ? "Squads Modu Aktif Edildi! Çiftli eşleşme ve arkadaş grupları açıldı 👯" : "Squads Modu İptal Edildi. Standart eşleşme moduna dönüldü. 👯");
+            }}
+            style={[styles.squadBtn, squadsActive && styles.squadBtnActive]}
+            testID="squads-btn"
+          >
+            <Text style={[styles.squadText, squadsActive && { color: "#fff" }]}>
+              {squadsActive ? "👯 Squads (Aktif)" : "👯 Squads"}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -313,6 +324,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(139,92,246,0.15)",
     borderWidth: 1,
     borderColor: "rgba(139,92,246,0.4)",
+  },
+  squadBtnActive: {
+    backgroundColor: "#8B5CF6",
+    borderColor: theme.rose,
   },
   squadText: { color: "#8B5CF6", fontWeight: "700", fontSize: 12 },
   title: { color: theme.text, fontSize: 26, fontWeight: "900", letterSpacing: -0.5 },

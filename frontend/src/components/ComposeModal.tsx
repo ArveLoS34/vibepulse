@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Image, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as ImagePicker from "expo-image-picker";
 import { theme, radius, spacing } from "@/src/lib/theme";
 import { api } from "@/src/lib/api";
 
@@ -13,6 +14,7 @@ export function ComposeModal({ visible, onClose, onPosted }: Props) {
   const [err, setErr] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [voiceUri, setVoiceUri] = useState<string | null>(null);
+  const [imageUri, setImageUri] = useState<string | null>(null);
   const [recordingSec, setRecordingSec] = useState(0);
   const timerRef = useRef<any>(null);
 
@@ -20,10 +22,25 @@ export function ComposeModal({ visible, onClose, onPosted }: Props) {
     if (visible) {
       setText("");
       setVoiceUri(null);
+      setImageUri(null);
       setErr(null);
       setRecordingSec(0);
     }
   }, [visible]);
+
+  const pickPhoto = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return alert("Galeri izni gerekli");
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.5,
+      base64: true,
+    });
+    if (!res.canceled && res.assets[0]?.base64) {
+      setImageUri(`data:image/jpeg;base64,${res.assets[0].base64}`);
+    }
+  };
 
   const startRecording = async () => {
     setRecording(true);
@@ -48,8 +65,8 @@ export function ComposeModal({ visible, onClose, onPosted }: Props) {
 
   const remaining = 280 - text.length;
   const canPost = useMemo(
-    () => (text.trim().length > 0 || voiceUri !== null) && remaining >= 0 && !busy,
-    [text, voiceUri, remaining, busy]
+    () => (text.trim().length > 0 || voiceUri !== null || imageUri !== null) && remaining >= 0 && !busy,
+    [text, voiceUri, imageUri, remaining, busy]
   );
 
   const submit = async () => {
@@ -60,12 +77,14 @@ export function ComposeModal({ visible, onClose, onPosted }: Props) {
       await api("/posts", {
         method: "POST",
         body: JSON.stringify({
-          text: text.trim() || "🎙️ Voice Vibe paylaştı.",
+          text: text.trim() || (imageUri ? "📷 Fotoğraf paylaştı." : "🎙️ Voice Vibe paylaştı."),
+          image: imageUri || undefined,
           voice_note: voiceUri || undefined,
         }),
       });
       setText("");
       setVoiceUri(null);
+      setImageUri(null);
       onPosted();
       onClose();
     } catch (e: any) {
@@ -113,6 +132,16 @@ export function ComposeModal({ visible, onClose, onPosted }: Props) {
           />
           {err ? <Text style={styles.err}>{err}</Text> : null}
 
+          {/* Image Preview UI */}
+          {imageUri ? (
+            <View style={styles.imagePreviewBox}>
+              <Image source={{ uri: imageUri }} style={styles.imagePreviewImg} />
+              <TouchableOpacity onPress={() => setImageUri(null)} style={styles.removeImageBtn}>
+                <Ionicons name="close" size={16} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           {/* Voice Vibe Recording UI */}
           {voiceUri ? (
             <View style={styles.voicePreview}>
@@ -125,14 +154,20 @@ export function ComposeModal({ visible, onClose, onPosted }: Props) {
           ) : null}
 
           <View style={styles.footer}>
-            <TouchableOpacity
-              onPress={recording ? () => stopRecording() : startRecording}
-              style={[styles.micBtn, recording ? styles.micBtnActive : null]}
-              testID="compose-mic"
-            >
-              <Ionicons name={recording ? "stop" : "mic-outline"} size={20} color={recording ? "#fff" : theme.rose} />
-              {recording ? <Text style={styles.recText}>{recordingSec}s / 15s</Text> : null}
-            </TouchableOpacity>
+            <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+              <TouchableOpacity onPress={pickPhoto} style={styles.micBtn}>
+                <Ionicons name="image-outline" size={20} color={theme.cyan} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={recording ? () => stopRecording() : startRecording}
+                style={[styles.micBtn, recording ? styles.micBtnActive : null]}
+                testID="compose-mic"
+              >
+                <Ionicons name={recording ? "stop" : "mic-outline"} size={20} color={recording ? "#fff" : theme.rose} />
+                {recording ? <Text style={styles.recText}>{recordingSec}s / 15s</Text> : null}
+              </TouchableOpacity>
+            </View>
 
             <Text style={[styles.counter, remaining < 0 ? { color: theme.danger } : remaining < 40 ? { color: theme.amber } : null]}>
               {remaining}
@@ -195,4 +230,7 @@ const styles = StyleSheet.create({
   },
   micBtnActive: { backgroundColor: theme.rose, borderColor: theme.rose },
   recText: { color: "#fff", fontWeight: "700", fontSize: 12 },
+  imagePreviewBox: { position: "relative", width: 100, height: 100, borderRadius: radius.md, overflow: "hidden", marginVertical: spacing.sm, borderWidth: 1, borderColor: theme.border },
+  imagePreviewImg: { width: "100%", height: "100%", resizeMode: "cover" },
+  removeImageBtn: { position: "absolute", top: 4, right: 4, backgroundColor: "rgba(0,0,0,0.7)", width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center" },
 });

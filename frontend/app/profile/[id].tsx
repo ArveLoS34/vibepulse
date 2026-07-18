@@ -197,6 +197,11 @@ export default function PublicProfile() {
 
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.md }}>
               <Text style={styles.name}>{user.name}</Text>
+              {user.is_founder ? (
+                <View style={styles.founderPill}>
+                  <Text style={styles.founderText}>👑 Kurucu</Text>
+                </View>
+              ) : null}
               {user.is_verified ? (
                 <Ionicons name="checkmark-circle" size={22} color="#06B6D4" />
               ) : null}
@@ -467,6 +472,15 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(244,63,94,0.12)", borderWidth: 1, borderColor: "rgba(244,63,94,0.3)",
   },
   vibeText: { color: theme.rose, fontWeight: "700", fontSize: 13 },
+  founderPill: {
+    backgroundColor: "rgba(245,158,11,0.2)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: "#F59E0B",
+  },
+  founderText: { color: "#F59E0B", fontWeight: "800", fontSize: 11 },
   intentPill: {
     marginTop: 8,
     paddingHorizontal: 14,
