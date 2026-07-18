@@ -30,7 +30,7 @@ export async function api<T = any>(path: string, opts: ApiOptions = {}): Promise
   const url = `${BASE_URL}/api${path}`;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 saniye zaman aşımı (fotoğraf yüklemeleri için)
+  const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 saniye zaman aşımı (Render soğuk başlatma uyanması için)
 
   try {
     const res = await fetch(url, { ...opts, headers, signal: controller.signal });
@@ -44,13 +44,17 @@ export async function api<T = any>(path: string, opts: ApiOptions = {}): Promise
     }
     if (!res.ok) {
       const msg = json?.detail || `Request failed (${res.status})`;
-      throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+      const errorObj: any = new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+      errorObj.status = res.status;
+      throw errorObj;
     }
     return json as T;
   } catch (err: any) {
     clearTimeout(timeoutId);
     if (err.name === "AbortError") {
-      throw new Error("Sunucuya bağlanılamadı (Zaman aşımı). Lütfen backend ve Wi-Fi bağlantınızı kontrol edin.");
+      const timeoutErr: any = new Error("Sunucu uyanıyor (Zaman aşımı). Lütfen birazdan tekrar deneyin.");
+      timeoutErr.isTimeout = true;
+      throw timeoutErr;
     }
     throw err;
   }

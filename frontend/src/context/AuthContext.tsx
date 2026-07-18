@@ -58,9 +58,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await saveToken(res.token);
       }
       setUser(res.user);
-    } catch {
-      setUser(null);
-      await clearToken();
+    } catch (err: any) {
+      const status = err?.status;
+      const msg = String(err?.message || "").toLowerCase();
+      // ONLY clear token if backend explicitly responded HTTP 401 Unauthorized or revoked token!
+      if (
+        status === 401 ||
+        msg.includes("401") ||
+        msg.includes("not authenticated") ||
+        msg.includes("invalid or expired token") ||
+        msg.includes("iptal edildi")
+      ) {
+        setUser(null);
+        await clearToken();
+      } else {
+        // Network timeout / Render server waking up from cold start: Keep token stored!
+        console.log("Preserving user session during server cold-start / network delay:", msg);
+      }
     } finally {
       setLoading(false);
     }
