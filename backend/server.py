@@ -98,60 +98,6 @@ async def send_email_async(to_email: str, subject: str, html_content: str) -> bo
     log.warning("SMTP veya E-posta API kimlik bilgisi yok (%s).", to_email)
     return False
 
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-
-SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
-SMTP_USER = os.environ.get("SMTP_USER", "")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
-SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER or "noreply@vibepulse.app")
-
-OFFICIAL_IBAN = os.environ.get("OFFICIAL_IBAN", "TR88 0006 7010 0000 0076 1583 55")
-OFFICIAL_BANK_NAME = os.environ.get("OFFICIAL_BANK_NAME", "Yapı Kredi Bankası (YAPIKREDİ)")
-OFFICIAL_ACCOUNT_HOLDER = os.environ.get("OFFICIAL_ACCOUNT_HOLDER", "RECEP ALİ KESER")
-
-
-async def send_email_async(to_email: str, subject: str, html_content: str) -> bool:
-    resend_key = os.environ.get("RESEND_API_KEY", "")
-    if resend_key:
-        try:
-            async with httpx.AsyncClient(timeout=10) as hx:
-                resp = await hx.post(
-                    "https://api.resend.com/emails",
-                    headers={"Authorization": f"Bearer {resend_key}", "Content-Type": "application/json"},
-                    json={"from": "VibePulse <onboarding@resend.dev>", "to": [to_email], "subject": subject, "html": html_content}
-                )
-                if resp.status_code in (200, 201, 202):
-                    log.info("E-posta Resend API ile başarıyla gönderildi (%s)", to_email)
-                    return True
-        except Exception as e:
-            log.warning("Resend API e-posta gönderimi başarısız: %s", e)
-
-    if SMTP_USER and SMTP_PASSWORD:
-        def _send():
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"] = f"VibePulse App <{SMTP_FROM}>"
-            msg["To"] = to_email
-            msg.attach(MIMEText(html_content, "html", "utf-8"))
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
-                server.starttls()
-                server.login(SMTP_USER, SMTP_PASSWORD)
-                server.sendmail(SMTP_FROM, [to_email], msg.as_string())
-            return True
-
-        try:
-            await asyncio.to_thread(_send)
-            log.info("E-posta SMTP ile başarıyla gönderildi (%s)", to_email)
-            return True
-        except Exception as e:
-            log.error("SMTP gönderimi başarısız (%s): %s", to_email, e)
-
-    log.warning("SMTP veya E-posta API kimlik bilgisi yok (%s).", to_email)
-    return False
-
 
 JWT_ALGO = "HS256"
 JWT_EXPIRY_DAYS = 3650
@@ -751,8 +697,8 @@ class AdminResolveReportIn(BaseModel):
 
 class PromoteUserIn(BaseModel):
     target_email: str
-    make_admin: bool = True
-    make_premium: bool = True
+    make_admin: Optional[bool] = None
+    make_premium: Optional[bool] = None
     secret_key: Optional[str] = None
 
 
@@ -2295,25 +2241,41 @@ async def promote_user(payload: PromoteUserIn, current=Depends(get_current_user)
     if not target:
         raise HTTPException(status_code=404, detail=f"'{target_email}' e-postasına sahip kullanıcı bulunamadı.")
 
-    badges = target.get("badges", [])
-    if payload.make_admin and "👑 Sistem Yöneticisi" not in badges:
-        badges.append("👑 Sistem Yöneticisi")
-    if payload.make_premium and "⭐ Premium" not in badges:
-        badges.append("⭐ Premium")
+    badges = list(target.get("badges", []))
+    updates: dict = {}
 
-    updates = {
-        "is_admin": payload.make_admin,
-        "is_premium": payload.make_premium,
-        "badges": badges,
-        "premium_expires_at": (now_utc() + timedelta(days=3650)).isoformat(),
-    }
+    if payload.make_admin is not None:
+        updates["is_admin"] = payload.make_admin
+        if payload.make_admin:
+            if "👑 Sistem Yöneticisi" not in badges:
+                badges.append("👑 Sistem Yöneticisi")
+        else:
+            badges = [b for b in badges if b != "👑 Sistem Yöneticisi"]
+
+    if payload.make_premium is not None:
+        updates["is_premium"] = payload.make_premium
+        if payload.make_premium:
+            if "⭐ Premium" not in badges:
+                badges.append("⭐ Premium")
+            updates["premium_expires_at"] = (now_utc() + timedelta(days=3650)).isoformat()
+        else:
+            badges = [b for b in badges if b != "⭐ Premium"]
+            updates["premium_expires_at"] = None
+
+    updates["badges"] = badges
     await db.users.update_one({"user_id": target["user_id"]}, {"$set": updates})
 
+    status_str = []
+    if payload.make_admin is True: status_str.append("Yönetici Yapıldı")
+    elif payload.make_admin is False: status_str.append("Yönetici Yetkisi Alındı")
+    if payload.make_premium is True: status_str.append("VIP Yapıldı")
+    elif payload.make_premium is False: status_str.append("VIP Yetkisi Alındı")
+
     return {
-        "message": f"'{target.get('name', target_email)}' kullanıcısına seçilen yetkiler başarıyla tanımlandı! 👑",
+        "message": f"'{target.get('name', target_email)}' kullanıcısının yetkileri güncellendi ({', '.join(status_str)}) ✨",
         "target_email": target_email,
-        "is_admin": payload.make_admin,
-        "is_premium": payload.make_premium,
+        "is_admin": updates.get("is_admin", target.get("is_admin")),
+        "is_premium": updates.get("is_premium", target.get("is_premium")),
     }
 
 
@@ -2531,6 +2493,19 @@ async def answer_question(question_id: str, payload: AnswerQuestionIn, current=D
         }
         await db.posts.insert_one(post_doc)
 
+    asker_id = q.get("asker_user_id")
+    if asker_id:
+        responder_name = current.get("name") or "Bir kullanıcı"
+        asyncio.create_task(create_in_app_notification(
+            asker_id, "ama_answer", "💬 Anonim Sorunuz Yanıtlandı!",
+            f"{responder_name} sorduğunuz soruyu yanıtladı: \"{payload.answer_text[:50]}\"",
+            {"user_id": current["user_id"], "name": current.get("name"), "avatar": (current.get("photos") or [""])[0]}
+        ))
+        asyncio.create_task(send_push_notification(
+            asker_id, "💬 Anonim Sorunuz Yanıtlandı!",
+            f"{responder_name} sorduğunuz soruyu yanıtladı!"
+        ))
+
     return {"message": "Sorunuz cevaplandı ve yayınlandı!"}
 
 
@@ -2582,6 +2557,21 @@ async def verify_selfie(payload: VerifySelfieIn, current=Depends(get_current_use
         }}
     )
     updated_user = await db.users.find_one({"user_id": current["user_id"]}, {"_id": 0})
+
+    if current.get("email"):
+        asyncio.create_task(send_email_async(
+            current["email"],
+            "VibePulse 🔵 Mavi Tik Hesabınız Onaylandı!",
+            f"""
+            <div style="font-family: sans-serif; padding: 20px; background: #0A0A0C; color: #fff; border-radius: 12px; max-width: 500px;">
+                <h2 style="color: #06B6D4;">🔵 Mavi Tik Rozetiniz Tanımlandı!</h2>
+                <p>Merhaba <b>{current.get('name', 'Kullanıcı')}</b>,</p>
+                <p>Canlı selfie biyometrik doğrulamanız başarıyla tamamlandı. Profilinize 🔵 <b>Onaylı Hesap Rozeti</b> eklenmiştir.</p>
+                <p style="color: #888; font-size: 12px; margin-top: 20px;">VibePulse Güvenlik Ekibi</p>
+            </div>
+            """
+        ))
+
     return {
         "message": "Tebrikler! Biyometrik selfie doğrulamanız onaylandı. Profilinize Mavi Tik (🔵 Onaylı Hesap) tanımlandı! ✨",
         "is_verified": True,
@@ -2620,6 +2610,7 @@ async def suggest_venue(match_id: str, payload: SuggestVenueIn, current=Depends(
     }
     await db.messages.insert_one(doc)
     await db.matches.update_one({"match_id": match_id}, {"$set": {"last_message_at": doc["created_at"]}})
+    doc.pop("_id", None)
     
     asyncio.create_task(create_in_app_notification(
         other, "venue_suggestion", "Kahve Buluşması Önerisi! ☕",
@@ -2690,6 +2681,40 @@ async def close_live_room(room_id: str, current=Depends(get_current_user)):
 
     await db.live_rooms.update_one({"room_id": room_id}, {"$set": {"is_active": False, "ended_at": now_utc().isoformat()}})
     return {"message": "Canlı Ses Odası sonlandırıldı. 🎙️"}
+
+
+class LiveRoomMessageIn(BaseModel):
+    text: str = Field(min_length=1, max_length=280)
+
+
+@api.get("/live-rooms/{room_id}")
+async def get_live_room(room_id: str, current=Depends(get_current_user)):
+    room = await db.live_rooms.find_one({"room_id": room_id}, {"_id": 0})
+    if not room:
+        raise HTTPException(status_code=404, detail="Oda bulunamadı")
+    return {"room": room}
+
+
+@api.post("/live-rooms/{room_id}/messages")
+async def send_live_room_message(room_id: str, payload: LiveRoomMessageIn, current=Depends(get_current_user)):
+    room = await db.live_rooms.find_one({"room_id": room_id})
+    if not room:
+        raise HTTPException(status_code=404, detail="Oda bulunamadı")
+
+    msg_doc = {
+        "id": new_id("lmsg"),
+        "sender": current.get("name") or current.get("handle") or "Kullanıcı",
+        "sender_id": current["user_id"],
+        "text": payload.text.strip(),
+        "created_at": now_utc().isoformat()
+    }
+
+    await db.live_rooms.update_one(
+        {"room_id": room_id},
+        {"$push": {"chat_messages": msg_doc}}
+    )
+
+    return {"message": msg_doc}
 
 
 # --- v2 Feature 4: Squads / Double Date Mode ---

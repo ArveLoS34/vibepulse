@@ -43,8 +43,25 @@ export async function api<T = any>(path: string, opts: ApiOptions = {}): Promise
       json = { detail: text };
     }
     if (!res.ok) {
-      const msg = json?.detail || `Request failed (${res.status})`;
-      const errorObj: any = new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+      let detail = json?.detail;
+      let msg = "İşlem sırasında bir hata oluştu.";
+      if (typeof detail === "string") {
+        msg = detail;
+      } else if (Array.isArray(detail) && detail.length > 0) {
+        const firstErr = detail[0];
+        if (firstErr?.type === "string_too_short" && firstErr?.loc?.includes("title")) {
+          msg = "Oda başlığı en az 3 karakter olmalıdır.";
+        } else if (firstErr?.msg) {
+          msg = firstErr.msg;
+        } else {
+          msg = "Girdiğiniz metin çok kısa veya geçersiz.";
+        }
+      } else if (detail) {
+        msg = typeof detail === "object" ? (detail.message || JSON.stringify(detail)) : String(detail);
+      } else {
+        msg = `Sunucu hatası (${res.status})`;
+      }
+      const errorObj: any = new Error(msg);
       errorObj.status = res.status;
       throw errorObj;
     }

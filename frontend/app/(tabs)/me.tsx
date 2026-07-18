@@ -93,22 +93,23 @@ export default function MeScreen() {
     }
   };
 
-  const handlePromoteUser = async () => {
+  const handleUserRoleChange = async (action: "grant_vip" | "revoke_vip" | "grant_admin" | "revoke_admin") => {
     if (!targetEmail.trim()) return alert("Lütfen kullanıcı e-postası girin");
     setPromoteBusy(true);
     try {
+      const payload: any = { target_email: targetEmail.trim().toLowerCase() };
+      if (action === "grant_vip") payload.make_premium = true;
+      if (action === "revoke_vip") payload.make_premium = false;
+      if (action === "grant_admin") payload.make_admin = true;
+      if (action === "revoke_admin") payload.make_admin = false;
+
       const res = await api<{ message: string }>("/admin/promote-user", {
         method: "POST",
-        body: JSON.stringify({
-          target_email: targetEmail.trim().toLowerCase(),
-          make_admin: true,
-          make_premium: true,
-        }),
+        body: JSON.stringify(payload),
       });
       alert(res.message);
-      setTargetEmail("");
     } catch (e: any) {
-      alert(e?.message || "Yetki tanımlanamadı");
+      alert(e?.message || "İşlem gerçekleştirilemedi");
     } finally {
       setPromoteBusy(false);
     }
@@ -444,8 +445,8 @@ export default function MeScreen() {
             )}
 
             <View style={styles.promoteBox}>
-              <Text style={styles.promoteTitle}>👑 Bir Üyeye VIP / Admin Yetkisi Ver</Text>
-              <Text style={styles.promoteSub}>Yetki vermek istediğin kullanıcının kayıtlı e-posta adresini gir:</Text>
+              <Text style={styles.promoteTitle}>👑 Üye Yetki Yönetimi (VIP & Admin)</Text>
+              <Text style={styles.promoteSub}>İşlem yapmak istediğiniz kullanıcının e-posta adresini girip istediğiniz aksiyon butonuna tıklayın:</Text>
               <TextInput
                 value={targetEmail}
                 onChangeText={setTargetEmail}
@@ -455,22 +456,46 @@ export default function MeScreen() {
                 keyboardType="email-address"
                 style={styles.promoteInput}
               />
-              <TouchableOpacity
-                onPress={handlePromoteUser}
-                disabled={promoteBusy || !targetEmail.trim()}
-                style={[styles.promoteSubmitBtn, (promoteBusy || !targetEmail.trim()) ? { opacity: 0.5 } : null]}
-              >
-                <LinearGradient
-                  colors={[theme.rose, "#8B5CF6"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={{ paddingVertical: 12, alignItems: "center", borderRadius: radius.pill }}
-                >
-                  <Text style={{ color: "#fff", fontWeight: "800" }}>
-                    {promoteBusy ? "Yetki Tanımlanıyor..." : "Kullanıcıya Tam Yetki Ver 👑"}
-                  </Text>
-                </LinearGradient>
-              </TouchableOpacity>
+
+              <View style={{ gap: 10, marginTop: 10 }}>
+                {/* VIP Roles Row */}
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => handleUserRoleChange("grant_vip")}
+                    disabled={promoteBusy || !targetEmail.trim()}
+                    style={[{ flex: 1, backgroundColor: "rgba(245, 158, 11, 0.2)", paddingVertical: 12, borderRadius: radius.md, borderWidth: 1, borderColor: "#F59E0B", alignItems: "center" }, (promoteBusy || !targetEmail.trim()) && { opacity: 0.4 }]}
+                  >
+                    <Text style={{ color: "#F59E0B", fontWeight: "800", fontSize: 13 }}>⭐ VIP Üyelik Ver</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => handleUserRoleChange("revoke_vip")}
+                    disabled={promoteBusy || !targetEmail.trim()}
+                    style={[{ flex: 1, backgroundColor: "rgba(239, 68, 68, 0.15)", paddingVertical: 12, borderRadius: radius.md, borderWidth: 1, borderColor: theme.danger, alignItems: "center" }, (promoteBusy || !targetEmail.trim()) && { opacity: 0.4 }]}
+                  >
+                    <Text style={{ color: theme.danger, fontWeight: "800", fontSize: 13 }}>🚫 VIP Üyelik Kaldır</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Admin Roles Row */}
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => handleUserRoleChange("grant_admin")}
+                    disabled={promoteBusy || !targetEmail.trim()}
+                    style={[{ flex: 1, backgroundColor: "rgba(16, 185, 129, 0.2)", paddingVertical: 12, borderRadius: radius.md, borderWidth: 1, borderColor: "#10B981", alignItems: "center" }, (promoteBusy || !targetEmail.trim()) && { opacity: 0.4 }]}
+                  >
+                    <Text style={{ color: "#10B981", fontWeight: "800", fontSize: 13 }}>👑 Yönetici Yetkisi Ver</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => handleUserRoleChange("revoke_admin")}
+                    disabled={promoteBusy || !targetEmail.trim()}
+                    style={[{ flex: 1, backgroundColor: "rgba(239, 68, 68, 0.15)", paddingVertical: 12, borderRadius: radius.md, borderWidth: 1, borderColor: theme.danger, alignItems: "center" }, (promoteBusy || !targetEmail.trim()) && { opacity: 0.4 }]}
+                  >
+                    <Text style={{ color: theme.danger, fontWeight: "800", fontSize: 13 }}>❌ Yöneticiliği Kaldır</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             </View>
           </ScrollView>
         </SafeAreaView>

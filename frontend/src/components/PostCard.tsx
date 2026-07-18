@@ -141,13 +141,13 @@ export function PostCard({ post, onChange }: { post: Post; onChange?: (p: Post) 
 
         {post.image ? <Image source={{ uri: post.image }} style={styles.media} /> : null}
         <View style={styles.actionsRow}>
-          <TouchableOpacity onPress={goPost} style={styles.action} testID={`comment-${post.post_id}`}>
-            <Ionicons name="chatbubble-outline" size={18} color={theme.textDim} />
-            <Text style={styles.actionText}>{post.comments_count}</Text>
-          </TouchableOpacity>
           <TouchableOpacity onPress={toggleLike} style={styles.action} testID={`like-${post.post_id}`}>
             <Ionicons name={liked ? "heart" : "heart-outline"} size={20} color={liked ? theme.rose : theme.textDim} />
             <Text style={[styles.actionText, liked ? { color: theme.rose } : null]}>{count}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={goPost} style={styles.action} testID={`comment-${post.post_id}`}>
+            <Ionicons name="chatbubble-outline" size={18} color={theme.textDim} />
+            <Text style={styles.actionText}>{post.comments_count}</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={sendVibe} style={[styles.action, styles.vibeAction]} testID={`sendvibe-${post.post_id}`}>
             <Ionicons name="flash" size={18} color={theme.cyan} />

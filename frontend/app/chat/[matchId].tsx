@@ -75,6 +75,11 @@ export default function ChatScreen() {
   const [recordSec, setRecordSec] = useState(0);
   const recTimerRef = useRef<any>(null);
 
+  const mediaRecorderRef = useRef<any>(null);
+  const audioChunksRef = useRef<any[]>([]);
+  const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const currentSoundRef = useRef<any>(null);
+
   const listRef = useRef<FlatList>(null);
   const pollRef = useRef<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -103,7 +108,35 @@ export default function ChatScreen() {
   const startVoiceRecord = async () => {
     setRecordingVoice(true);
     setRecordSec(0);
-    setVoiceUri("data:audio/mp3;base64,mock_voice_note");
+    audioChunksRef.current = [];
+
+    if (typeof window !== "undefined" && navigator?.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new (window as any).MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+
+        mediaRecorder.ondataavailable = (event: any) => {
+          if (event.data.size > 0) audioChunksRef.current.push(event.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/mp3" });
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = () => {
+            setVoiceUri(reader.result as string);
+          };
+          stream.getTracks().forEach((track: any) => track.stop());
+        };
+
+        mediaRecorder.start();
+      } catch (err) {
+        setVoiceUri("data:audio/mp3;base64,mock_voice_note");
+      }
+    } else {
+      setVoiceUri("data:audio/mp3;base64,mock_voice_note");
+    }
 
     recTimerRef.current = setInterval(() => {
       setRecordSec((s) => {
@@ -118,7 +151,46 @@ export default function ChatScreen() {
 
   const stopVoiceRecord = () => {
     clearInterval(recTimerRef.current);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
+    } else if (!voiceUri) {
+      setVoiceUri("data:audio/mp3;base64,mock_voice_note");
+    }
     setRecordingVoice(false);
+  };
+
+  const togglePlayVoice = (msgId: string, uri?: string) => {
+    if (!uri) return;
+
+    if (playingVoiceId === msgId) {
+      if (currentSoundRef.current) {
+        currentSoundRef.current.pause();
+        currentSoundRef.current = null;
+      }
+      setPlayingVoiceId(null);
+      return;
+    }
+
+    if (currentSoundRef.current) {
+      currentSoundRef.current.pause();
+    }
+
+    try {
+      if (typeof window !== "undefined" && (window as any).Audio) {
+        const audio = new (window as any).Audio(uri);
+        currentSoundRef.current = audio;
+        setPlayingVoiceId(msgId);
+        audio.play().catch(() => {});
+        audio.onended = () => {
+          setPlayingVoiceId(null);
+          currentSoundRef.current = null;
+        };
+      }
+    } catch {
+      setPlayingVoiceId(null);
+    }
   };
 
   const load = useCallback(async () => {
@@ -322,10 +394,24 @@ export default function ChatScreen() {
                       ) : null}
 
                       {item.voice_note ? (
-                        <View style={styles.voiceNoteBubble}>
-                          <Ionicons name="volume-high" size={20} color="#fff" />
-                          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>Sesli Mesaj (15s)</Text>
-                        </View>
+                        <TouchableOpacity
+                          onPress={() => togglePlayVoice(item.message_id, item.voice_note)}
+                          style={[styles.voiceNoteBubble, { backgroundColor: "rgba(255,255,255,0.15)" }]}
+                        >
+                          <View style={styles.playCircleMine}>
+                            <Ionicons name={playingVoiceId === item.message_id ? "pause" : "play"} size={16} color={theme.rose} />
+                          </View>
+                          <View style={{ flex: 1, gap: 2 }}>
+                            <View style={styles.voiceWaveformInline}>
+                              {[10, 18, 8, 22, 14, 20, 12, 16, 24, 10, 18, 14].map((h, i) => (
+                                <View key={i} style={[styles.waveBarInline, { height: h, backgroundColor: playingVoiceId === item.message_id ? "#fff" : "rgba(255,255,255,0.5)" }]} />
+                              ))}
+                            </View>
+                            <Text style={{ color: "#fff", fontSize: 11, fontWeight: "700" }}>
+                              {playingVoiceId === item.message_id ? "Oynatılıyor..." : "Sesli Mesajı Dinle ▶️"}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
                       ) : null}
 
                       {item.text ? <Text style={styles.textLight}>{item.text}</Text> : null}
@@ -337,10 +423,24 @@ export default function ChatScreen() {
                       ) : null}
 
                       {item.voice_note ? (
-                        <View style={styles.voiceNoteBubble}>
-                          <Ionicons name="volume-high" size={20} color={theme.rose} />
-                          <Text style={{ color: theme.rose, fontWeight: "700", fontSize: 13 }}>Sesli Mesaj (15s)</Text>
-                        </View>
+                        <TouchableOpacity
+                          onPress={() => togglePlayVoice(item.message_id, item.voice_note)}
+                          style={[styles.voiceNoteBubble, { backgroundColor: "rgba(244,63,94,0.08)" }]}
+                        >
+                          <View style={styles.playCircleTheirs}>
+                            <Ionicons name={playingVoiceId === item.message_id ? "pause" : "play"} size={16} color="#fff" />
+                          </View>
+                          <View style={{ flex: 1, gap: 2 }}>
+                            <View style={styles.voiceWaveformInline}>
+                              {[10, 18, 8, 22, 14, 20, 12, 16, 24, 10, 18, 14].map((h, i) => (
+                                <View key={i} style={[styles.waveBarInline, { height: h, backgroundColor: playingVoiceId === item.message_id ? theme.rose : theme.borderStrong }]} />
+                              ))}
+                            </View>
+                            <Text style={{ color: theme.rose, fontSize: 11, fontWeight: "700" }}>
+                              {playingVoiceId === item.message_id ? "Oynatılıyor..." : "Sesli Mesajı Dinle ▶️"}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
                       ) : null}
 
                       {item.text ? <Text style={styles.textDark}>{item.text}</Text> : null}
@@ -528,7 +628,20 @@ const styles = StyleSheet.create({
   textLight: { color: "#fff", fontSize: 15, lineHeight: 21 },
   textDark: { color: theme.text, fontSize: 15, lineHeight: 21 },
   chatImage: { width: 200, height: 200, borderRadius: radius.md, marginBottom: 6 },
-  voiceNoteBubble: { flexDirection: "row", alignItems: "center", gap: 6, marginVertical: 4 },
+  voiceNoteBubble: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+    marginVertical: 4,
+    minWidth: 180,
+  },
+  playCircleMine: { width: 32, height: 32, borderRadius: 16, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
+  playCircleTheirs: { width: 32, height: 32, borderRadius: 16, backgroundColor: theme.rose, alignItems: "center", justifyContent: "center" },
+  voiceWaveformInline: { flexDirection: "row", alignItems: "center", gap: 3 },
+  waveBarInline: { width: 3, borderRadius: 2 },
   imagePreviewWrap: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, position: "relative" },
   imagePreview: { width: 70, height: 70, borderRadius: radius.md },
   removeImageBtn: {

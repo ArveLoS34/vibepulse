@@ -36,6 +36,31 @@ export default function FeedScreen() {
   const [loungeMessage, setLoungeMessage] = useState("");
   const [loungeChat, setLoungeChat] = useState<any[]>([]);
   const [raisedHand, setRaisedHand] = useState(false);
+  const [micMuted, setMicMuted] = useState(false);
+  const loungePollRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!activeLounge?.room_id) {
+      clearInterval(loungePollRef.current);
+      return;
+    }
+
+    const pollLounge = async () => {
+      try {
+        const res = await api<{ room: any }>(`/live-rooms/${activeLounge.room_id}`);
+        if (res.room) {
+          if (res.room.chat_messages && Array.isArray(res.room.chat_messages)) {
+            setLoungeChat(res.room.chat_messages);
+          }
+          setActiveLounge((prev: any) => ({ ...prev, ...res.room }));
+        }
+      } catch {}
+    };
+
+    pollLounge();
+    loungePollRef.current = setInterval(pollLounge, 2000);
+    return () => clearInterval(loungePollRef.current);
+  }, [activeLounge?.room_id]);
 
   // Story state
   const [addStoryOpen, setAddStoryOpen] = useState(false);
@@ -138,6 +163,7 @@ export default function FeedScreen() {
 
   const submitCreateRoom = async () => {
     if (!roomTitle.trim()) return alert("Lütfen oda başlığı girin.");
+    if (roomTitle.trim().length < 3) return alert("Oda başlığı en az 3 karakter olmalıdır.");
     setCreateRoomBusy(true);
     try {
       const res = await api<{ message: string; room: any }>("/live-rooms", {
@@ -148,6 +174,7 @@ export default function FeedScreen() {
       setCreateRoomOpen(false);
       setRoomTitle("");
       setActiveLounge(res.room);
+      if (res.room?.chat_messages) setLoungeChat(res.room.chat_messages);
       loadLiveRooms();
     } catch (e: any) {
       alert(e?.message || "Oda oluşturulamadı.");
@@ -169,15 +196,24 @@ export default function FeedScreen() {
     loadLiveRooms();
   };
 
-  const sendLoungeChat = () => {
-    if (!loungeMessage.trim()) return;
-    const newMsg = {
-      id: String(Date.now()),
-      sender: user?.name || "Kullanıcı",
-      text: loungeMessage.trim(),
-    };
-    setLoungeChat((prev) => [...prev, newMsg]);
+  const sendLoungeChat = async () => {
+    if (!loungeMessage.trim() || !activeLounge) return;
+    const msgText = loungeMessage.trim();
     setLoungeMessage("");
+    try {
+      const res = await api<{ message: any }>(`/live-rooms/${activeLounge.room_id}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ text: msgText }),
+      });
+      setLoungeChat((prev) => [...prev, res.message]);
+    } catch {
+      const fallback = {
+        id: String(Date.now()),
+        sender: user?.name || user?.handle || "Kullanıcı",
+        text: msgText,
+      };
+      setLoungeChat((prev) => [...prev, fallback]);
+    }
   };
 
   const [speedModalOpen, setSpeedModalOpen] = useState(false);
@@ -398,7 +434,7 @@ export default function FeedScreen() {
         {/* TikTok Style VIP Live Audio Spaces Bar */}
         <View style={styles.liveSpaceSection}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-            <Text style={styles.liveSpaceSectionTitle}>🎙️ TikTok VIP Canlı Ses Odaları</Text>
+            <Text style={styles.liveSpaceSectionTitle}>🎙️ VibePlus Live Odaları</Text>
             <TouchableOpacity onPress={handleStartLiveRoom} style={styles.startRoomBtn}>
               <Ionicons name="radio" size={14} color="#fff" />
               <Text style={styles.startRoomBtnText}>Oda Aç (VIP)</Text>
@@ -621,11 +657,19 @@ export default function FeedScreen() {
 
               {/* Stage Speaker Grid (TikTok / Clubhouse Style) */}
               <View style={styles.loungeStage}>
-                <ScrollView contentContainerStyle={{ flexDirection: "row", flexWrap: "wrap", gap: 20, justifyContent: "center", paddingVertical: spacing.xl }}>
+                {/* Active Mic Status Banner */}
+                <View style={{ marginBottom: 12, paddingHorizontal: 16, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: micMuted ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.15)", borderWidth: 1, borderColor: micMuted ? "rgba(239, 68, 68, 0.4)" : "rgba(16, 185, 129, 0.4)", flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Ionicons name={micMuted ? "mic-off" : "mic"} size={16} color={micMuted ? theme.danger : "#10B981"} />
+                  <Text style={{ color: micMuted ? theme.danger : "#10B981", fontWeight: "800", fontSize: 12 }}>
+                    {micMuted ? "🔇 Mikrofonunuz Kapalı" : "🔊 Canlı Mikrofon Açık — Sesiniz İletiliyor"}
+                  </Text>
+                </View>
+
+                <ScrollView contentContainerStyle={{ flexDirection: "row", flexWrap: "wrap", gap: 20, justifyContent: "center", paddingVertical: spacing.md }}>
                   {(activeLounge.speakers || [activeLounge.host]).map((spk: any, idx: number) => (
                     <View key={idx} style={styles.speakerBox}>
                       <LinearGradient
-                        colors={[theme.rose, "#8B5CF6"]}
+                        colors={!micMuted && spk.user_id === user?.user_id ? ["#10B981", "#06B6D4"] : [theme.rose, "#8B5CF6"]}
                         style={styles.speakingWaveRing}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
@@ -652,6 +696,13 @@ export default function FeedScreen() {
 
                 {/* Bottom Interactive Controls */}
                 <View style={styles.loungeBottomBar}>
+                  <TouchableOpacity
+                    onPress={() => setMicMuted(!micMuted)}
+                    style={[styles.raiseHandBtn, micMuted && { backgroundColor: "rgba(239, 68, 68, 0.2)" }]}
+                  >
+                    <Ionicons name={micMuted ? "mic-off" : "mic"} size={18} color={micMuted ? theme.danger : "#10B981"} />
+                  </TouchableOpacity>
+
                   <TextInput
                     value={loungeMessage}
                     onChangeText={setLoungeMessage}
@@ -708,7 +759,7 @@ export default function FeedScreen() {
             <TextInput
               value={storyText}
               onChangeText={setStoryText}
-              placeholder="Hikayene bir yazı ekle..."
+              placeholder="Hikayene bir yazı ekle... (İsteğe Bağlı)"
               placeholderTextColor={theme.textMuted}
               multiline
               maxLength={280}
