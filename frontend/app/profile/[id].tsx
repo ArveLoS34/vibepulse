@@ -7,12 +7,14 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/src/lib/api";
 import { useTranslation } from "@/src/i18n/LanguageContext";
 import { useAuth } from "@/src/context/AuthContext";
+import { useScreenProtection } from "@/src/hooks/useScreenProtection";
 import { PostCard, Post } from "@/src/components/PostCard";
 import { Avatar } from "@/src/components/Avatar";
 import { theme, radius, spacing } from "@/src/lib/theme";
 import type { VibeUser } from "@/src/context/AuthContext";
 
 export default function PublicProfile() {
+  useScreenProtection(); // Enables Anti-Screenshot Flag & capture protection on profile screen
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t } = useTranslation();
@@ -197,9 +199,17 @@ export default function PublicProfile() {
               {user.name}{user.age ? <Text style={styles.age}>, {user.age}</Text> : null}
             </Text>
             <Text style={styles.handle}>@{user.handle}</Text>
+
             {user.vibe_status ? (
               <View style={styles.vibePill}>
                 <Text style={styles.vibeText}>✨ {user.vibe_status}</Text>
+              </View>
+            ) : null}
+
+            {/* Relationship Goal / Niyet Badge */}
+            {user.relationship_goal ? (
+              <View style={styles.intentPill}>
+                <Text style={styles.intentPillText}>🎯 Niyet: {user.relationship_goal}</Text>
               </View>
             ) : null}
 
@@ -446,6 +456,16 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(244,63,94,0.12)", borderWidth: 1, borderColor: "rgba(244,63,94,0.3)",
   },
   vibeText: { color: theme.rose, fontWeight: "700", fontSize: 13 },
+  intentPill: {
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(139,92,246,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(139,92,246,0.4)",
+  },
+  intentPillText: { color: "#8B5CF6", fontWeight: "800", fontSize: 12 },
   spotifyWidget: {
     flexDirection: "row",
     alignItems: "center",
@@ -512,7 +532,7 @@ const styles = StyleSheet.create({
   modalHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justify.content: "space-between",
     padding: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
@@ -525,7 +545,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(244,63,94,0.15)",
     alignSelf: "center",
     alignItems: "center",
-    justifyContent: "center",
+    justify.content: "center",
     borderWidth: 2,
     borderColor: theme.rose,
   },
@@ -560,7 +580,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     borderRadius: radius.xl,
     alignItems: "center",
-    justifyContent: "center",
+    justify.content: "center",
     borderWidth: 1,
     borderColor: "rgba(244,63,94,0.4)",
     marginTop: 12,

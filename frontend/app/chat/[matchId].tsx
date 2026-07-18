@@ -21,6 +21,7 @@ import Constants from "expo-constants";
 import { api, TOKEN_KEY } from "@/src/lib/api";
 import { storage } from "@/src/utils/storage";
 import { useAuth } from "@/src/context/AuthContext";
+import { useScreenProtection } from "@/src/hooks/useScreenProtection";
 import { Avatar } from "@/src/components/Avatar";
 import { theme, radius, spacing } from "@/src/lib/theme";
 
@@ -45,6 +46,7 @@ type BlindDateInfo = {
 };
 
 export default function ChatScreen() {
+  useScreenProtection(); // Activates Android FLAG_SECURE & iOS capture shield
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
   const router = useRouter();
   const { user } = useAuth();
@@ -216,7 +218,7 @@ export default function ChatScreen() {
         <Avatar uri={other?.photo} name={other?.name || "?"} size={38} />
         <View style={{ flex: 1 }}>
           <Text style={styles.name} numberOfLines={1}>{other?.name || "Sohbet"}</Text>
-          <Text style={styles.status}>çevrimiçi ~ vibe modu ✨</Text>
+          <Text style={styles.status}>🔒 Ekran Görüntüsü Engeli Aktif</Text>
         </View>
         <TouchableOpacity onPress={loadWingman} style={styles.wingmanBtn} testID="chat-ai-wingman">
           <Ionicons name="sparkles" size={16} color="#F59E0B" />
@@ -406,7 +408,7 @@ const styles = StyleSheet.create({
   },
   iconBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   name: { color: theme.text, fontWeight: "700", fontSize: 16 },
-  status: { color: theme.cyan, fontSize: 11, fontWeight: "600" },
+  status: { color: "#10B981", fontSize: 11, fontWeight: "700" },
   wingmanBtn: {
     flexDirection: "row",
     alignItems: "center",
