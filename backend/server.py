@@ -516,6 +516,7 @@ def public_user(user: dict, viewer: Optional[dict] = None, include_email: bool =
         "badges": user.get("badges", ["🌱 Yeni Vibe"]),
         "now_playing": user.get("now_playing"),
         "theme_id": user.get("theme_id", "rose_purple"),
+        "relationship_goal": user.get("relationship_goal", "Sohbet & Vibe 💬"),
         "is_email_verified": user.get("is_email_verified", False),
     }
     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -684,11 +685,14 @@ class ProfileUpdate(BaseModel):
     location: Optional[dict] = None  # {lat, lng}
     onboarded: Optional[bool] = None
     theme_id: Optional[str] = "rose_purple"
+    relationship_goal: Optional[str] = None
 
 
 class PostCreate(BaseModel):
     text: str = Field(min_length=1, max_length=280)
-    image: Optional[str] = None  # base64 data URI
+    image: Optional[str] = None
+    voice_note: Optional[str] = None
+    video_note: Optional[str] = None  # base64 data URI
     voice_note: Optional[str] = None  # base64 audio data URI
 
 
@@ -704,6 +708,8 @@ class SwipeIn(BaseModel):
 class MessageCreate(BaseModel):
     text: Optional[str] = Field(default="", max_length=500)
     image: Optional[str] = None
+    voice_note: Optional[str] = None
+    video_note: Optional[str] = None
 
 
 class PushTokenIn(BaseModel):
@@ -727,6 +733,8 @@ class StoryReplyIn(BaseModel):
 class StoryCreate(BaseModel):
     text: Optional[str] = Field(default="", max_length=280)
     image: Optional[str] = None
+    voice_note: Optional[str] = None
+    video_note: Optional[str] = None
     voice_note: Optional[str] = None
 
 
@@ -1653,6 +1661,8 @@ async def send_message(match_id: str, payload: MessageCreate, current=Depends(ge
         "to_user_id": other,
         "text": payload.text or "",
         "image": payload.image or "",
+        "voice_note": payload.voice_note or "",
+        "video_note": payload.video_note or "",
         "read": False,
         "created_at": now_utc().isoformat(),
     }

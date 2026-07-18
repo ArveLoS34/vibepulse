@@ -30,6 +30,7 @@ export default function EditProfile() {
   const [bio, setBio] = useState(user?.bio || "");
   const [vibeStatus, setVibeStatus] = useState(user?.vibe_status || "");
   const [city, setCity] = useState(user?.city || "");
+  const [relationshipGoal, setRelationshipGoal] = useState<string>(user?.relationship_goal || "Arkadaşlık & Vibe ☕");
   const [selectedTheme, setSelectedTheme] = useState<string>(user?.theme_id || "rose_purple");
   const [photos, setPhotos] = useState<string[]>(user?.photos || []);
   const [busy, setBusy] = useState(false);
@@ -40,6 +41,13 @@ export default function EditProfile() {
     { id: "cyberpunk_gold", key: "theme_cyber_gold" as const, colors: ["#F59E0B", "#EF4444"] },
     { id: "sakura_blossom", key: "theme_sakura" as const, colors: ["#EC4899", "#F43F5E"] },
     { id: "midnight_emerald", key: "theme_emerald" as const, colors: ["#10B981", "#06B6D4"] },
+  ];
+
+  const INTENTS = [
+    "Ciddi İlişki 💍",
+    "Arkadaşlık & Vibe ☕",
+    "Sadece Sohbet 💬",
+    "Eğlence & Etkinlik 🎉",
   ];
 
   const pickImage = async () => {
@@ -64,7 +72,16 @@ export default function EditProfile() {
     setBusy(true);
     setErr(null);
     try {
-      await updateProfile({ name, handle, bio, vibe_status: vibeStatus, city, photos, theme_id: selectedTheme });
+      await updateProfile({
+        name,
+        handle,
+        bio,
+        vibe_status: vibeStatus,
+        relationship_goal: relationshipGoal,
+        city,
+        photos,
+        theme_id: selectedTheme,
+      });
       router.back();
     } catch (e: any) {
       setErr(e?.message || "Kaydedilemedi");
@@ -136,6 +153,22 @@ export default function EditProfile() {
             placeholder="kullanici_adi"
             placeholderTextColor={theme.textMuted}
           />
+
+          <Text style={styles.label}>🎯 Niyet & Beklenti (Relationship Goal)</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginTop: 4 }}>
+            {INTENTS.map((intent) => {
+              const active = relationshipGoal === intent;
+              return (
+                <TouchableOpacity
+                  key={intent}
+                  onPress={() => setRelationshipGoal(intent)}
+                  style={[styles.intentChip, active && styles.intentChipActive]}
+                >
+                  <Text style={[styles.intentText, active && styles.intentTextActive]}>{intent}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
 
           <Text style={styles.label}>Anlık Mood</Text>
           <TextInput
@@ -216,6 +249,17 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
     fontSize: 15,
   },
+  intentChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    backgroundColor: theme.card,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  intentChipActive: { borderColor: theme.rose, backgroundColor: "rgba(244,63,94,0.15)" },
+  intentText: { color: theme.textDim, fontSize: 13, fontWeight: "600" },
+  intentTextActive: { color: theme.rose, fontWeight: "800" },
   themeChip: {
     flexDirection: "row",
     alignItems: "center",

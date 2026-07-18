@@ -193,6 +193,13 @@ export default function MeScreen() {
             </View>
           ) : null}
 
+          {/* Relationship Goal / Niyet Badge */}
+          {user.relationship_goal ? (
+            <View style={styles.intentPill}>
+              <Text style={styles.intentPillText}>🎯 Niyet: {user.relationship_goal}</Text>
+            </View>
+          ) : null}
+
           <TouchableOpacity
             onPress={() => router.push("/premium")}
             style={{ width: "100%", marginVertical: spacing.md }}
@@ -505,6 +512,16 @@ const styles = StyleSheet.create({
     borderColor: "rgba(244,63,94,0.3)",
   },
   vibeText: { color: theme.rose, fontWeight: "700", fontSize: 13 },
+  intentPill: {
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(139,92,246,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(139,92,246,0.4)",
+  },
+  intentPillText: { color: "#8B5CF6", fontWeight: "800", fontSize: 12 },
   bio: { color: theme.text, textAlign: "center", marginTop: spacing.md, fontSize: 15, lineHeight: 22 },
   meta: { color: theme.textDim, marginTop: spacing.md, fontSize: 13 },
   interestsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: spacing.md, justifyContent: "center" },

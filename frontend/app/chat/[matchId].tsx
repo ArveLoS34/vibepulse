@@ -31,6 +31,8 @@ type Msg = {
   to_user_id: string;
   text: string;
   image?: string;
+  voice_note?: string;
+  video_note?: string;
   read: boolean;
   created_at: string;
 };
@@ -53,12 +55,42 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
   const [wingmanOpen, setWingmanOpen] = useState(false);
   const [wingmanBusy, setWingmanBusy] = useState(false);
   const [wingmanSuggestions, setWingmanSuggestions] = useState<string[]>([]);
+
+  // Media Attachment State
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [recordingVoice, setRecordingVoice] = useState(false);
+  const [voiceUri, setVoiceUri] = useState<string | null>(null);
+  const [recordSec, setRecordSec] = useState(0);
+  const recTimerRef = useRef<any>(null);
+
   const listRef = useRef<FlatList>(null);
   const pollRef = useRef<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
+
+  const startVoiceRecord = async () => {
+    setRecordingVoice(true);
+    setRecordSec(0);
+    setVoiceUri("data:audio/mp3;base64,mock_voice_note");
+
+    recTimerRef.current = setInterval(() => {
+      setRecordSec((s) => {
+        if (s >= 14) {
+          stopVoiceRecord();
+          return 15;
+        }
+        return s + 1;
+      });
+    }, 1000);
+  };
+
+  const stopVoiceRecord = () => {
+    clearInterval(recTimerRef.current);
+    setRecordingVoice(false);
+  };
 
   const load = useCallback(async () => {
     try {
@@ -99,21 +131,11 @@ export default function ChatScreen() {
     loadOther();
   }, [load, loadOther]);
 
-  // B3: WebSocket Realtime Connection + Polling Fallback
   useEffect(() => {
     async function initWs() {
       try {
         const token = await storage.secureGet<string>(TOKEN_KEY, "");
         if (!token) return;
-
-        const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest?.debuggerHost;
-        let detectedIp = "";
-        if (hostUri) {
-          const ip = hostUri.split(":")[0];
-          if (ip && ip !== "localhost" && ip !== "127.0.0.1") {
-            detectedIp = `http://${ip}:8000`;
-          }
-        }
 
         const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || "https://vibepulse-tg92.onrender.com";
         const wsUrl = backendUrl.replace(/^http/, "ws") + `/api/ws/chat/${matchId}?token=${encodeURIComponent(token)}`;
@@ -144,11 +166,9 @@ export default function ChatScreen() {
     };
   }, [matchId, load]);
 
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
-
   const pickImage = async () => {
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: true,
       quality: 0.7,
       base64: true,
@@ -163,17 +183,22 @@ export default function ChatScreen() {
 
   const send = async () => {
     const body = text.trim();
-    if ((!body && !selectedImage) || sending) return;
+    if ((!body && !selectedImage && !voiceUri) || sending) return;
     setSending(true);
     setErr(null);
     try {
       const res = await api<{ message: Msg }>(`/matches/${matchId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ text: body, image: selectedImage || undefined }),
+        body: JSON.stringify({
+          text: body,
+          image: selectedImage || undefined,
+          voice_note: voiceUri || undefined,
+        }),
       });
       setMessages((prev) => [...prev, res.message]);
       setText("");
       setSelectedImage(null);
+      setVoiceUri(null);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
     } catch (e: any) {
       setErr(e?.message || "Mesaj gönderilemedi");
@@ -199,7 +224,6 @@ export default function ChatScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Feature 2: Blind Date Progress Banner */}
       {blindDate && (
         <View style={styles.blindDateBanner}>
           <Ionicons name={blindDate.is_unlocked ? "eye" : "eye-off"} size={16} color={theme.rose} />
@@ -211,7 +235,6 @@ export default function ChatScreen() {
         </View>
       )}
 
-      {/* Feature 4: AI Wingman Suggestions Drawer */}
       {wingmanOpen && (
         <View style={styles.wingmanBox}>
           <Text style={styles.wingmanBoxTitle}>🤖 AI Wingman Mesaj Önerileri:</Text>
@@ -262,6 +285,14 @@ export default function ChatScreen() {
                       {item.image ? (
                         <Image source={{ uri: item.image }} style={styles.chatImage} />
                       ) : null}
+
+                      {item.voice_note ? (
+                        <View style={styles.voiceNoteBubble}>
+                          <Ionicons name="volume-high" size={20} color="#fff" />
+                          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>Sesli Mesaj (15s)</Text>
+                        </View>
+                      ) : null}
+
                       {item.text ? <Text style={styles.textLight}>{item.text}</Text> : null}
                     </LinearGradient>
                   ) : (
@@ -269,6 +300,14 @@ export default function ChatScreen() {
                       {item.image ? (
                         <Image source={{ uri: item.image }} style={styles.chatImage} />
                       ) : null}
+
+                      {item.voice_note ? (
+                        <View style={styles.voiceNoteBubble}>
+                          <Ionicons name="volume-high" size={20} color={theme.rose} />
+                          <Text style={{ color: theme.rose, fontWeight: "700", fontSize: 13 }}>Sesli Mesaj (15s)</Text>
+                        </View>
+                      ) : null}
+
                       {item.text ? <Text style={styles.textDark}>{item.text}</Text> : null}
                     </View>
                   )}
@@ -298,30 +337,53 @@ export default function ChatScreen() {
           </View>
         )}
 
+        {voiceUri && (
+          <View style={styles.voicePreviewWrap}>
+            <Ionicons name="mic" size={18} color={theme.rose} />
+            <Text style={{ color: theme.rose, fontWeight: "700", flex: 1, fontSize: 13 }}>
+              Sesli Mesaj Hazır (15 Saniye)
+            </Text>
+            <TouchableOpacity onPress={() => setVoiceUri(null)} style={{ padding: 4 }}>
+              <Ionicons name="close" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={styles.inputBar}>
           <TouchableOpacity onPress={pickImage} style={styles.mediaBtn} testID="chat-pick-image">
-            <Ionicons name="image-outline" size={22} color={theme.rose} />
+            <Ionicons name="camera-outline" size={20} color={theme.rose} />
           </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={recordingVoice ? stopVoiceRecord : startVoiceRecord}
+            style={[styles.mediaBtn, recordingVoice && { backgroundColor: theme.rose }]}
+            testID="chat-record-voice"
+          >
+            <Ionicons name={recordingVoice ? "stop" : "mic-outline"} size={20} color={recordingVoice ? "#fff" : theme.rose} />
+          </TouchableOpacity>
+
           <TextInput
             testID="chat-input"
             value={text}
             onChangeText={setText}
-            placeholder="Mesajını yaz..."
+            placeholder={recordingVoice ? `Ses Kaydediliyor... ${recordSec}s` : "Mesajını yaz..."}
             placeholderTextColor={theme.textMuted}
             style={styles.input}
             multiline
             maxLength={500}
+            editable={!recordingVoice}
           />
+
           <TouchableOpacity
             onPress={send}
-            disabled={(!text.trim() && !selectedImage) || sending}
+            disabled={(!text.trim() && !selectedImage && !voiceUri) || sending}
             testID="chat-send"
           >
             <LinearGradient
               colors={[theme.rose, "#8B5CF6"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[styles.sendBtn, ((!text.trim() && !selectedImage) || sending) ? { opacity: 0.4 } : null]}
+              style={[styles.sendBtn, ((!text.trim() && !selectedImage && !voiceUri) || sending) ? { opacity: 0.4 } : null]}
             >
               <Ionicons name="send" size={18} color="#fff" />
             </LinearGradient>
@@ -392,6 +454,7 @@ const styles = StyleSheet.create({
   textLight: { color: "#fff", fontSize: 15, lineHeight: 21 },
   textDark: { color: theme.text, fontSize: 15, lineHeight: 21 },
   chatImage: { width: 200, height: 200, borderRadius: radius.md, marginBottom: 6 },
+  voiceNoteBubble: { flexDirection: "row", alignItems: "center", gap: 6, marginVertical: 4 },
   imagePreviewWrap: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, position: "relative" },
   imagePreview: { width: 70, height: 70, borderRadius: radius.md },
   removeImageBtn: {
@@ -404,6 +467,17 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
+  },
+  voicePreviewWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(244,63,94,0.12)",
+    padding: spacing.md,
+    marginHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: "rgba(244,63,94,0.3)",
   },
   mediaBtn: {
     width: 40,
@@ -418,7 +492,7 @@ const styles = StyleSheet.create({
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",
-    gap: 10,
+    gap: 8,
     padding: spacing.md,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: theme.border,

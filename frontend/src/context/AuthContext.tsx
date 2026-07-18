@@ -12,6 +12,7 @@ export type VibeUser = {
   gender?: string;
   orientation?: string;
   vibe_status?: string;
+  relationship_goal?: string;
   interests?: string[];
   music_tags?: string[];
   photos?: string[];
@@ -61,7 +62,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err: any) {
       const status = err?.status;
       const msg = String(err?.message || "").toLowerCase();
-      // ONLY clear token if backend explicitly responded HTTP 401 Unauthorized or revoked token!
       if (
         status === 401 ||
         msg.includes("401") ||
@@ -72,7 +72,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
         await clearToken();
       } else {
-        // Network timeout / Render server waking up from cold start: Keep token stored!
         console.log("Preserving user session during server cold-start / network delay:", msg);
       }
     } finally {
