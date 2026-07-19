@@ -650,11 +650,10 @@ class ProfileUpdate(BaseModel):
 
 
 class PostCreate(BaseModel):
-    text: str = Field(min_length=1, max_length=280)
+    text: Optional[str] = Field(default="", max_length=280)
     image: Optional[str] = None
     voice_note: Optional[str] = None
     video_note: Optional[str] = None  # base64 data URI
-    voice_note: Optional[str] = None  # base64 audio data URI
 
 
 class CommentCreate(BaseModel):
@@ -1162,14 +1161,18 @@ async def get_user(user_id: str, current=Depends(get_current_user)):
 @api.post("/posts")
 async def create_post(payload: PostCreate, current=Depends(get_current_user)):
     _validate_image(payload.image)  # SEC-002
-    safe, reason = await moderate_text(payload.text, current["user_id"])
-    if not safe:
-        raise HTTPException(status_code=400, detail=f"Post rejected: {reason}")
+    if payload.text and payload.text.strip():
+        safe, reason = await moderate_text(payload.text, current["user_id"])
+        if not safe:
+            raise HTTPException(status_code=400, detail=f"Post rejected: {reason}")
+    elif not payload.image and not payload.voice_note and not payload.video_note:
+        raise HTTPException(status_code=400, detail="Gönderiniz metin, fotoğraf veya ses içermelidir.")
+
     post_id = new_id("post")
     doc = {
         "post_id": post_id,
         "user_id": current["user_id"],
-        "text": payload.text,
+        "text": payload.text or "",
         "image": payload.image or "",
         "voice_note": payload.voice_note or "",
         "likes": [],  # list of user_ids
@@ -2747,12 +2750,72 @@ class LiveRoomMessageIn(BaseModel):
     text: str = Field(min_length=1, max_length=280)
 
 
+class ApproveSpeakerIn(BaseModel):
+    target_user_id: str
+    action: Literal["approve", "reject"]
+
+
 @api.get("/live-rooms/{room_id}")
 async def get_live_room(room_id: str, current=Depends(get_current_user)):
     room = await db.live_rooms.find_one({"room_id": room_id}, {"_id": 0})
     if not room:
         raise HTTPException(status_code=404, detail="Oda bulunamadı")
     return {"room": room}
+
+
+@api.post("/live-rooms/{room_id}/raise-hand")
+async def raise_hand_live_room(room_id: str, current=Depends(get_current_user)):
+    room = await db.live_rooms.find_one({"room_id": room_id})
+    if not room:
+        raise HTTPException(status_code=404, detail="Oda bulunamadı")
+
+    req_doc = {
+        "user_id": current["user_id"],
+        "name": current.get("name", ""),
+        "avatar": (current.get("photos") or [""])[0] if current.get("photos") else "",
+        "created_at": now_utc().isoformat()
+    }
+    await db.live_rooms.update_one(
+        {"room_id": room_id},
+        {"$addToSet": {"raised_hands": req_doc}}
+    )
+    return {"message": "Yayıncıya konuşma isteği gönderildi! ✋"}
+
+
+@api.post("/live-rooms/{room_id}/approve-speaker")
+async def approve_speaker_live_room(room_id: str, payload: ApproveSpeakerIn, current=Depends(get_current_user)):
+    room = await db.live_rooms.find_one({"room_id": room_id})
+    if not room:
+        raise HTTPException(status_code=404, detail="Oda bulunamadı")
+
+    if room["host_id"] != current["user_id"] and not current.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Yalnızca oda yayıncısı yetkilendirebilir.")
+
+    if payload.action == "approve":
+        target = await db.users.find_one({"user_id": payload.target_user_id})
+        if target:
+            spk = {
+                "user_id": target["user_id"],
+                "name": target.get("name", ""),
+                "handle": target.get("handle", ""),
+                "avatar": (target.get("photos") or [""])[0] if target.get("photos") else "",
+                "is_host": False,
+                "is_speaking": True
+            }
+            await db.live_rooms.update_one(
+                {"room_id": room_id},
+                {
+                    "$addToSet": {"speakers": spk},
+                    "$pull": {"raised_hands": {"user_id": payload.target_user_id}}
+                }
+            )
+    else:
+        await db.live_rooms.update_one(
+            {"room_id": room_id},
+            {"$pull": {"raised_hands": {"user_id": payload.target_user_id}}}
+        )
+
+    return {"message": "Konuşmacı isteği güncellendi."}
 
 
 @api.post("/live-rooms/{room_id}/messages")

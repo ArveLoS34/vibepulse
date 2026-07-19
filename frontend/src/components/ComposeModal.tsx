@@ -42,6 +42,19 @@ export function ComposeModal({ visible, onClose, onPosted }: Props) {
     }
   };
 
+  const takePhotoCamera = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) return alert("Kamera izni gerekli");
+    const res = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      quality: 0.5,
+      base64: true,
+    });
+    if (!res.canceled && res.assets[0]?.base64) {
+      setImageUri(`data:image/jpeg;base64,${res.assets[0].base64}`);
+    }
+  };
+
   const startRecording = async () => {
     setRecording(true);
     setRecordingSec(0);
@@ -77,7 +90,7 @@ export function ComposeModal({ visible, onClose, onPosted }: Props) {
       await api("/posts", {
         method: "POST",
         body: JSON.stringify({
-          text: text.trim() || (imageUri ? "📷 Fotoğraf paylaştı." : "🎙️ Voice Vibe paylaştı."),
+          text: text.trim(),
           image: imageUri || undefined,
           voice_note: voiceUri || undefined,
         }),
@@ -155,8 +168,12 @@ export function ComposeModal({ visible, onClose, onPosted }: Props) {
 
           <View style={styles.footer}>
             <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+              <TouchableOpacity onPress={takePhotoCamera} style={styles.micBtn}>
+                <Ionicons name="camera-outline" size={20} color={theme.cyan} />
+              </TouchableOpacity>
+
               <TouchableOpacity onPress={pickPhoto} style={styles.micBtn}>
-                <Ionicons name="image-outline" size={20} color={theme.cyan} />
+                <Ionicons name="image-outline" size={20} color="#8B5CF6" />
               </TouchableOpacity>
 
               <TouchableOpacity

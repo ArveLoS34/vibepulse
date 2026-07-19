@@ -233,6 +233,28 @@ export default function FeedScreen() {
     } catch {}
   };
 
+  const handleRaiseHand = async () => {
+    if (!activeLounge) return;
+    try {
+      await api(`/live-rooms/${activeLounge.room_id}/raise-hand`, { method: "POST" });
+      setRaisedHand(true);
+      alert("Yayıncıya konuşma isteğiniz iletildi! ✋");
+    } catch {
+      alert("İstek gönderilemedi.");
+    }
+  };
+
+  const handleApproveSpeaker = async (targetUserId: string, action: "approve" | "reject") => {
+    if (!activeLounge) return;
+    try {
+      await api(`/live-rooms/${activeLounge.room_id}/approve-speaker`, {
+        method: "POST",
+        body: JSON.stringify({ target_user_id: targetUserId, action }),
+      });
+      alert(action === "approve" ? "Konuşmacı sahneye davet edildi! 🎙️" : "İstek reddedildi.");
+    } catch {}
+  };
+
   const handleNotifPress = (item: any) => {
     setNotifModalOpen(false);
     if (item.actor?.post_id || item.type === "like" || item.type === "comment") {
@@ -729,6 +751,26 @@ export default function FeedScreen() {
                   </Text>
                 </View>
 
+                {/* Host Pending Speak Requests Banner (Item 8) */}
+                {activeLounge.host_id === user?.user_id && activeLounge.raised_hands && activeLounge.raised_hands.length > 0 ? (
+                  <View style={styles.raiseRequestBox}>
+                    <Text style={styles.raiseRequestTitle}>✋ Konuşma İstekleri ({activeLounge.raised_hands.length}):</Text>
+                    {activeLounge.raised_hands.map((rh: any) => (
+                      <View key={rh.user_id} style={styles.raiseRequestRow}>
+                        <Text style={styles.raiseRequestName}>{rh.name} sahneye çıkmak istiyor</Text>
+                        <View style={{ flexDirection: "row", gap: 6 }}>
+                          <TouchableOpacity onPress={() => handleApproveSpeaker(rh.user_id, "approve")} style={styles.approveBtn}>
+                            <Text style={{ color: "#fff", fontWeight: "800", fontSize: 11 }}>İzin Ver 🟢</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleApproveSpeaker(rh.user_id, "reject")} style={styles.rejectBtn}>
+                            <Text style={{ color: theme.danger, fontWeight: "800", fontSize: 11 }}>Reddet 🔴</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+
                 <ScrollView contentContainerStyle={{ flexDirection: "row", flexWrap: "wrap", gap: 20, justifyContent: "center", paddingVertical: spacing.md }}>
                   {(activeLounge.speakers || [activeLounge.host]).map((spk: any, idx: number) => (
                     <View key={idx} style={styles.speakerBox}>
@@ -779,10 +821,7 @@ export default function FeedScreen() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    onPress={() => {
-                      setRaisedHand(!raisedHand);
-                      alert(raisedHand ? "Söz talebi geri çekildi." : "Yayıncıya konuşma isteği gönderildi! ✋");
-                    }}
+                    onPress={handleRaiseHand}
                     style={[styles.raiseHandBtn, raisedHand && { backgroundColor: theme.amber }]}
                   >
                     <Text style={{ fontSize: 18 }}>✋</Text>
@@ -864,13 +903,22 @@ export default function FeedScreen() {
 
               {/* Author Header */}
               <View style={styles.storyAuthorRow}>
-                <Avatar uri={activeStoryGroup.user?.avatar} name={activeStoryGroup.user?.name || ""} size={42} />
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={{ color: "#fff", fontWeight: "800", fontSize: 15 }}>{activeStoryGroup.user?.name}</Text>
-                  <Text style={{ color: theme.textDim, fontSize: 12 }}>
-                    @{activeStoryGroup.user?.handle} • {timeAgo(activeStoryGroup.stories[activeStoryIdx]?.created_at)} önce
-                  </Text>
-                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    const uId = activeStoryGroup.user?.user_id;
+                    setActiveStoryGroup(null);
+                    if (uId) router.push({ pathname: "/profile/[id]", params: { id: uId } });
+                  }}
+                  style={{ flexDirection: "row", alignItems: "center", flex: 1 }}
+                >
+                  <Avatar uri={activeStoryGroup.user?.avatar} name={activeStoryGroup.user?.name || ""} size={42} />
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={{ color: "#fff", fontWeight: "800", fontSize: 15 }}>{activeStoryGroup.user?.name}</Text>
+                    <Text style={{ color: theme.textDim, fontSize: 12 }}>
+                      @{activeStoryGroup.user?.handle} • {timeAgo(activeStoryGroup.stories[activeStoryIdx]?.created_at)} önce
+                    </Text>
+                  </View>
+                </TouchableOpacity>
 
                 {/* Delete Story Button if Owner */}
                 {activeStoryGroup.user?.user_id === user?.user_id ? (
@@ -1260,6 +1308,12 @@ const styles = StyleSheet.create({
   loungeTitle: { color: theme.text, fontSize: 18, fontWeight: "900", marginTop: 4 },
   leaveLoungeBtn: { backgroundColor: "rgba(239,68,68,0.15)", paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: "rgba(239,68,68,0.3)" },
   loungeStage: { flex: 1, justifyContent: "center", alignItems: "center" },
+  raiseRequestBox: { width: "90%", backgroundColor: theme.card, padding: 12, borderRadius: radius.lg, borderWidth: 1, borderColor: "#F59E0B", marginBottom: 12, gap: 8 },
+  raiseRequestTitle: { color: "#F59E0B", fontWeight: "800", fontSize: 13 },
+  raiseRequestRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  raiseRequestName: { color: theme.text, fontSize: 12, fontWeight: "700" },
+  approveBtn: { backgroundColor: "#10B981", paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill },
+  rejectBtn: { backgroundColor: "rgba(239, 68, 68, 0.15)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill, borderWidth: 1, borderColor: "rgba(239, 68, 68, 0.3)" },
   speakerBox: { alignItems: "center", width: 90 },
   speakingWaveRing: { padding: 4, borderRadius: 40 },
   speakerName: { color: "#fff", fontWeight: "800", fontSize: 13, marginTop: 6 },

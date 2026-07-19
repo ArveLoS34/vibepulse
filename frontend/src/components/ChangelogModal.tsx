@@ -20,6 +20,23 @@ type ReleaseNote = {
 
 const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "v2.7.0",
+    date: "20 Temmuz 2026",
+    title: "Sihirli Değnek Asistanı, Sahne Konuşmacı Onayı & Instagram Yönlendirme",
+    badgeColor: "#10B981",
+    items: [
+      { icon: "wand", text: "Sihirli Değnek (🪄) Sohbet Menüsü", sub: "Sohbetteki Buluş, Ev Kur ve AI Wingman butonları tek sihirli menü altında toplandı." },
+      { icon: "person", text: "Hikaye Profil Yönlendirmesi", sub: "Story izleme ekranında profil resmine tıklayınca doğrudan kişinin profiline gitme." },
+      { icon: "mic", text: "Live Oda Sahne Konuşma İzni", sub: "Ses odasında el kaldıran dinleyici için yayıncıya onay/reddet bildirimi paneli." },
+      { icon: "logo-instagram", text: "Instagram Profil Butonu", sub: "Biyografi altındaki Instagram butonuna basınca uygulamayı/profili anında açma." },
+      { icon: "camera", text: "Kamera İle Fotoğraf Çekme", sub: "Vibe gönderisi paylaşırken galeriye ek olarak doğrudan kamera ile çekme seçeneği." },
+      { icon: "sparkles", text: "Sarı Altın Kurucu Rozeti (👑)", sub: "VibePulse kurucusu için özel sarı taç rozeti." },
+      { icon: "checkmark-seal", text: "Meta Stil Doğrulama Tikleri", sub: "VIP ve e-posta doğrulama rozetlerinin Meta stili onay mühürleri ile yenilenmesi." },
+      { icon: "eye-off", text: "Sadece Yetkili Ekran Güvenliği Uyarısı", sub: "Sohbetteki ekran koruması yazısının sadece yetkili (admin/kurucu) hesaplara gözükmesi." },
+      { icon: "swap-horizontal", text: "Keşfet Yumuşak Swipe Düzeltmesi", sub: "Dokunmatik ekranlarda sağa/sola kart kaydırma hassasiyeti ve stabilitesi arttırıldı." },
+    ],
+  },
+  {
     version: "v2.6.0",
     date: "19 Temmuz 2026",
     title: "Sanal Ev Kurma, VIP Turuncu Tik & Görüntüleme İyileştirmeleri",

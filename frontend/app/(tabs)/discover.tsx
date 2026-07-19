@@ -106,12 +106,15 @@ export default function DiscoverScreen() {
 
   const responder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 5,
-      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 3 || Math.abs(g.dy) > 3,
+      onPanResponderMove: (_, g) => {
+        pan.setValue({ x: g.dx, y: g.dy });
+      },
       onPanResponderRelease: (_, g) => {
         if (g.dx > SWIPE_THRESHOLD) swipe("like", W * 1.2);
         else if (g.dx < -SWIPE_THRESHOLD) swipe("pass", -W * 1.2);
-        else Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: Platform.OS !== "web", friction: 6 }).start();
+        else Animated.spring(pan, { toValue: { x: 0, y: 0 }, useNativeDriver: false, friction: 6 }).start();
       },
     })
   ).current;

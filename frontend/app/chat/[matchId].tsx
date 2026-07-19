@@ -64,8 +64,8 @@ export default function ChatScreen() {
   const [wingmanBusy, setWingmanBusy] = useState(false);
   const [wingmanSuggestions, setWingmanSuggestions] = useState<string[]>([]);
 
-  // Venue Date Suggestions Modal State
-  const [venueModalOpen, setVenueModalOpen] = useState(false);
+  // Magic Wand Action Menu State (Item 5)
+  const [magicMenuOpen, setMagicMenuOpen] = useState(false);
   const [venues, setVenues] = useState<any[]>([]);
 
   // Virtual House / Roommate Simulation State (Item 7)
@@ -328,22 +328,14 @@ export default function ChatScreen() {
         <Avatar uri={other?.photo} name={other?.name || "?"} size={38} />
         <View style={{ flex: 1 }}>
           <Text style={styles.name} numberOfLines={1}>{other?.name || "Sohbet"}</Text>
-          <Text style={styles.status}>🔒 Ekran Görüntüsü Engeli Aktif</Text>
+          {(user?.is_admin || user?.is_founder) ? (
+            <Text style={styles.status}>🔒 Ekran Görüntüsü Engeli Aktif</Text>
+          ) : null}
         </View>
 
-        <TouchableOpacity onPress={loadVenues} style={styles.venueBtn}>
-          <Ionicons name="cafe" size={16} color="#10B981" />
-          <Text style={{ color: "#10B981", fontSize: 11, fontWeight: "800" }}>☕ Buluş</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => setHomeModalOpen(true)} style={styles.homeBtn}>
-          <Ionicons name="home" size={16} color="#06B6D4" />
-          <Text style={{ color: "#06B6D4", fontSize: 11, fontWeight: "800" }}>🏡 Ev Kur</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={loadWingman} style={styles.wingmanBtn} testID="chat-ai-wingman">
-          <Ionicons name="sparkles" size={16} color="#F59E0B" />
-          <Text style={styles.wingmanText}>AI</Text>
+        {/* Single Magic Wand 🪄 Action Menu Button (Item 5) */}
+        <TouchableOpacity onPress={() => setMagicMenuOpen(true)} style={styles.magicWandBtn}>
+          <Text style={{ fontSize: 20 }}>🪄</Text>
         </TouchableOpacity>
       </View>
 
@@ -646,6 +638,64 @@ export default function ChatScreen() {
         </SafeAreaView>
       </Modal>
 
+      {/* Magic Wand Action Menu Modal (Item 5) */}
+      <Modal visible={magicMenuOpen} transparent animationType="fade" onRequestClose={() => setMagicMenuOpen(false)}>
+        <TouchableOpacity style={styles.magicBackdrop} activeOpacity={1} onPress={() => setMagicMenuOpen(false)}>
+          <View style={styles.magicSheet}>
+            <View style={styles.magicHeader}>
+              <Text style={styles.magicTitle}>🪄 Sihirli Sohbet Asistanı</Text>
+              <TouchableOpacity onPress={() => setMagicMenuOpen(false)}>
+                <Ionicons name="close" size={22} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: 10, marginTop: 10 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setMagicMenuOpen(false);
+                  loadVenues();
+                }}
+                style={styles.magicOptionBtn}
+              >
+                <Ionicons name="cafe" size={20} color="#10B981" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.magicOptionTitle}>☕ Buluşma Noktası Öner</Text>
+                  <Text style={styles.magicOptionSub}>Popüler kafeleri seç ve buluşma teklifi gönder.</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setMagicMenuOpen(false);
+                  setHomeModalOpen(true);
+                }}
+                style={styles.magicOptionBtn}
+              >
+                <Ionicons name="home" size={20} color="#06B6D4" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.magicOptionTitle}>🏡 Sanal Ev Kurma Simülasyonu</Text>
+                  <Text style={styles.magicOptionSub}>Ortak dekorasyon ve kurallar ile yaşam uyum skoru çıkar.</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setMagicMenuOpen(false);
+                  loadWingman();
+                }}
+                style={styles.magicOptionBtn}
+              >
+                <Ionicons name="sparkles" size={20} color="#F59E0B" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.magicOptionTitle}>🤖 AI Wingman Sohbet Önerisi</Text>
+                  <Text style={styles.magicOptionSub}>Tıkanan sohbete akıllı ve eğlenceli mesaj önerileri al.</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Lightbox Image Viewer Modal (Item 5) */}
       <Modal visible={!!chatZoomedImage} transparent animationType="fade" onRequestClose={() => setChatZoomedImage(null)}>
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.95)", justifyContent: "center", alignItems: "center" }}>
@@ -672,17 +722,23 @@ const styles = StyleSheet.create({
   iconBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   name: { color: theme.text, fontWeight: "700", fontSize: 16 },
   status: { color: "#10B981", fontSize: 11, fontWeight: "700" },
-  venueBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: radius.pill,
-    backgroundColor: "rgba(16, 185, 129, 0.15)",
+  magicWandBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(139, 92, 246, 0.18)",
     borderWidth: 1,
-    borderColor: "rgba(16, 185, 129, 0.4)",
+    borderColor: "rgba(139, 92, 246, 0.4)",
+    alignItems: "center",
+    justifyContent: "center",
   },
+  magicBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" },
+  magicSheet: { backgroundColor: theme.card, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.lg, gap: spacing.md, borderWidth: 1, borderColor: theme.border },
+  magicHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  magicTitle: { color: theme.text, fontSize: 16, fontWeight: "800" },
+  magicOptionBtn: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: theme.surface, padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: theme.border },
+  magicOptionTitle: { color: theme.text, fontSize: 14, fontWeight: "800" },
+  magicOptionSub: { color: theme.textDim, fontSize: 11, marginTop: 2 },
   homeBtn: {
     flexDirection: "row",
     alignItems: "center",

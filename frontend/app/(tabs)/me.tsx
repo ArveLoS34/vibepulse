@@ -1,5 +1,17 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  Linking,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -197,34 +209,35 @@ export default function MeScreen() {
 
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.md }}>
             <Text style={styles.name}>
-              {user.name} {user.age ? <Text style={styles.age}>, {user.age}</Text> : null}
+              {user.name}{user.age ? <Text style={styles.age}> {user.age}</Text> : null}
             </Text>
 
-            {/* Email Verification Green Tick */}
+            {/* Founder Yellow Crown Tick Badge */}
+            {(user.is_founder || user.email?.toLowerCase() === "ertackeser3453@gmail.com") ? (
+              <TouchableOpacity onPress={() => alert("👑 VibePulse Kurucusu & Sahibi")} style={{ paddingHorizontal: 2 }}>
+                <Ionicons name="sparkles" size={22} color="#FFD700" />
+              </TouchableOpacity>
+            ) : null}
+
+            {/* Email Verification Meta-style Green Tick */}
             <TouchableOpacity
               onPress={user.is_email_verified ? () => alert("✅ E-posta Adresi Doğrulanmış Güvenli Hesap") : handleStartVerify}
               disabled={verifyBusy}
             >
               <Ionicons
-                name={user.is_email_verified ? "checkmark-circle" : "alert-circle"}
+                name={user.is_email_verified ? "checkmark-seal" : "alert-circle"}
                 size={22}
                 color={user.is_email_verified ? "#10B981" : "#F59E0B"}
               />
             </TouchableOpacity>
 
-            {/* VIP Orange Verification Tick */}
+            {/* VIP Meta-style Orange Verification Tick */}
             {user.is_premium ? (
               <TouchableOpacity onPress={() => alert("VibePulse Premium")}>
-                <Ionicons name="checkmark-circle" size={22} color="#FF8C00" />
+                <Ionicons name="checkmark-seal" size={22} color="#FF8C00" />
               </TouchableOpacity>
             ) : null}
           </View>
-
-          {(user.is_founder || user.email?.toLowerCase() === "ertackeser3453@gmail.com") ? (
-            <View style={styles.founderBanner}>
-              <Text style={styles.founderBannerText}>👑 VibePulse Kurucusu & Sahibi</Text>
-            </View>
-          ) : null}
 
           <Text style={styles.handle}>@{user.handle}</Text>
 
@@ -286,6 +299,20 @@ export default function MeScreen() {
           ) : null}
 
           {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
+
+          {/* Instagram Deep Link Button (Item 12) */}
+          {user.instagram_handle ? (
+            <TouchableOpacity
+              onPress={() => {
+                const clean = user.instagram_handle.replace(/^@+/, "");
+                Linking.openURL(`https://instagram.com/${clean}`);
+              }}
+              style={styles.instaBtn}
+            >
+              <Ionicons name="logo-instagram" size={16} color="#E1306C" />
+              <Text style={styles.instaBtnText}>@{user.instagram_handle.replace(/^@+/, "")}</Text>
+            </TouchableOpacity>
+          ) : null}
           {user.city ? (
             <Text style={styles.meta}>
               <Ionicons name="location-outline" size={12} color={theme.cyan} /> {user.city}
@@ -645,6 +672,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(244,63,94,0.3)",
   },
+  instaBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(225, 48, 108, 0.15)",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: "rgba(225, 48, 108, 0.3)",
+  },
+  instaBtnText: { color: "#E1306C", fontSize: 13, fontWeight: "700" },
   founderBanner: {
     marginTop: 6,
     paddingHorizontal: 12,

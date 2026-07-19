@@ -126,17 +126,17 @@ export function PostCard({ post, onChange }: { post: Post; onChange?: (p: Post) 
               {post.author.name || "İsimsiz"}
             </Text>
 
-            {/* VIP Orange Tick Badge (Tapping shows "VibePulse Premium") */}
+            {/* VIP Meta Orange Tick Badge (Tapping shows "VibePulse Premium") */}
             {post.author?.is_premium ? (
               <TouchableOpacity onPress={() => alert("VibePulse Premium")} style={{ paddingHorizontal: 2 }}>
-                <Ionicons name="checkmark-circle" size={16} color="#FF8C00" />
+                <Ionicons name="checkmark-seal" size={16} color="#FF8C00" />
               </TouchableOpacity>
             ) : null}
 
             {isFounderAuthor ? (
-              <View style={styles.founderPill}>
-                <Text style={styles.founderText}>👑 Kurucu</Text>
-              </View>
+              <TouchableOpacity onPress={() => alert("👑 VibePulse Kurucusu & Sahibi")} style={{ paddingHorizontal: 2 }}>
+                <Ionicons name="sparkles" size={16} color="#FFD700" />
+              </TouchableOpacity>
             ) : null}
 
             <Text style={styles.handle} numberOfLines={1}>

@@ -1,5 +1,17 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Image,
+  Linking,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -197,31 +209,34 @@ export default function PublicProfile() {
             </TouchableOpacity>
 
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.md }}>
-              <Text style={styles.name}>{user.name}</Text>
+              <Text style={styles.name}>
+                {user.name}{user.age ? <Text style={styles.age}> {user.age}</Text> : null}
+              </Text>
 
-              {/* Email Verification Green Checkmark Tick */}
+              {/* Founder Yellow Gold Crown Tick Badge */}
+              {user.is_founder ? (
+                <TouchableOpacity onPress={() => alert("👑 VibePulse Kurucusu & Sahibi")} style={{ paddingHorizontal: 2 }}>
+                  <Ionicons name="sparkles" size={22} color="#FFD700" />
+                </TouchableOpacity>
+              ) : null}
+
+              {/* Email Verification Meta-style Green Checkmark Tick */}
               {user.is_email_verified ? (
                 <TouchableOpacity onPress={() => alert("✅ E-posta Adresi Doğrulanmış Güvenli Hesap")}>
-                  <Ionicons name="checkmark-circle" size={22} color="#10B981" />
+                  <Ionicons name="checkmark-seal" size={22} color="#10B981" />
                 </TouchableOpacity>
               ) : null}
 
-              {/* VIP Orange Verification Tick */}
+              {/* VIP Meta-style Orange Verification Tick */}
               {user.is_premium ? (
                 <TouchableOpacity onPress={() => alert("VibePulse Premium")}>
-                  <Ionicons name="checkmark-circle" size={22} color="#FF8C00" />
+                  <Ionicons name="checkmark-seal" size={22} color="#FF8C00" />
                 </TouchableOpacity>
               ) : null}
 
-              {user.is_founder ? (
-                <View style={styles.founderPill}>
-                  <Text style={styles.founderText}>👑 Kurucu</Text>
-                </View>
-              ) : null}
               {user.is_verified ? (
-                <Ionicons name="checkmark-circle" size={22} color="#06B6D4" />
+                <Ionicons name="checkmark-seal" size={22} color="#06B6D4" />
               ) : null}
-              {user.age ? <Text style={styles.age}>, {user.age}</Text> : null}
             </View>
             <Text style={styles.handle}>@{user.handle}</Text>
 
@@ -240,10 +255,16 @@ export default function PublicProfile() {
 
             {/* Social & Music Integration Badges */}
             {user.instagram_handle ? (
-              <View style={styles.instaWidget}>
+              <TouchableOpacity
+                onPress={() => {
+                  const clean = user.instagram_handle.replace(/^@+/, "");
+                  Linking.openURL(`https://instagram.com/${clean}`);
+                }}
+                style={styles.instaWidget}
+              >
                 <Ionicons name="logo-instagram" size={16} color="#E1306C" />
-                <Text style={styles.instaText}>@{user.instagram_handle}</Text>
-              </View>
+                <Text style={styles.instaText}>@{user.instagram_handle.replace(/^@+/, "")}</Text>
+              </TouchableOpacity>
             ) : null}
 
             {user.spotify_favorite_song ? (
