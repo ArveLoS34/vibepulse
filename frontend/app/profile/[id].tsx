@@ -220,22 +220,22 @@ export default function PublicProfile() {
                 </TouchableOpacity>
               ) : null}
 
-              {/* Email Verification Meta-style Green Checkmark Tick */}
+              {/* Email Verification Green Checkmark Tick */}
               {user.is_email_verified ? (
                 <TouchableOpacity onPress={() => alert("✅ E-posta Adresi Doğrulanmış Güvenli Hesap")}>
-                  <Ionicons name="checkmark-seal" size={22} color="#10B981" />
+                  <Ionicons name="checkmark-circle" size={22} color="#10B981" />
                 </TouchableOpacity>
               ) : null}
 
-              {/* VIP Meta-style Orange Verification Tick */}
+              {/* VIP Orange Verification Tick */}
               {user.is_premium ? (
                 <TouchableOpacity onPress={() => alert("VibePulse Premium")}>
-                  <Ionicons name="checkmark-seal" size={22} color="#FF8C00" />
+                  <Ionicons name="checkmark-circle" size={22} color="#FF8C00" />
                 </TouchableOpacity>
               ) : null}
 
               {user.is_verified ? (
-                <Ionicons name="checkmark-seal" size={22} color="#06B6D4" />
+                <Ionicons name="checkmark-circle" size={22} color="#06B6D4" />
               ) : null}
             </View>
             <Text style={styles.handle}>@{user.handle}</Text>

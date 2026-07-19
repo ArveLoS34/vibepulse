@@ -219,22 +219,22 @@ export default function MeScreen() {
               </TouchableOpacity>
             ) : null}
 
-            {/* Email Verification Meta-style Green Tick */}
+            {/* Email Verification Green Tick */}
             <TouchableOpacity
               onPress={user.is_email_verified ? () => alert("✅ E-posta Adresi Doğrulanmış Güvenli Hesap") : handleStartVerify}
               disabled={verifyBusy}
             >
               <Ionicons
-                name={user.is_email_verified ? "checkmark-seal" : "alert-circle"}
+                name={user.is_email_verified ? "checkmark-circle" : "alert-circle"}
                 size={22}
                 color={user.is_email_verified ? "#10B981" : "#F59E0B"}
               />
             </TouchableOpacity>
 
-            {/* VIP Meta-style Orange Verification Tick */}
+            {/* VIP Orange Verification Tick */}
             {user.is_premium ? (
               <TouchableOpacity onPress={() => alert("VibePulse Premium")}>
-                <Ionicons name="checkmark-seal" size={22} color="#FF8C00" />
+                <Ionicons name="checkmark-circle" size={22} color="#FF8C00" />
               </TouchableOpacity>
             ) : null}
           </View>
