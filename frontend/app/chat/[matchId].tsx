@@ -64,8 +64,9 @@ export default function ChatScreen() {
   const [wingmanBusy, setWingmanBusy] = useState(false);
   const [wingmanSuggestions, setWingmanSuggestions] = useState<string[]>([]);
 
-  // Magic Wand Action Menu State (Item 5)
+  // Magic Wand Action Menu & Venues State
   const [magicMenuOpen, setMagicMenuOpen] = useState(false);
+  const [venueModalOpen, setVenueModalOpen] = useState(false);
   const [venues, setVenues] = useState<any[]>([]);
 
   // Virtual House / Roommate Simulation State (Item 7)
