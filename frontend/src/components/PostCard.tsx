@@ -214,50 +214,6 @@ export function PostCard({ post, onChange }: { post: Post; onChange?: (p: Post) 
     </Pressable>
   );
 }
-        {post.author.vibe_status ? (
-          <View style={styles.vibePill}>
-            <Text style={styles.vibeText}>✨ {post.author.vibe_status}</Text>
-          </View>
-        ) : null}
-        <Text style={styles.body}>{post.text}</Text>
-
-        {post.voice_note ? (
-          <TouchableOpacity
-            onPress={toggleAudio}
-            style={styles.voicePlayer}
-            testID={`voice-${post.post_id}`}
-          >
-            <View style={styles.voicePlayBtn}>
-              <Ionicons name={playingAudio ? "pause" : "play"} size={16} color="#fff" />
-            </View>
-            <View style={styles.voiceWaveform}>
-              {[12, 20, 8, 24, 16, 22, 10, 18, 14, 24, 8, 16, 22, 10].map((h, i) => (
-                <View key={i} style={[styles.waveBar, { height: h }, playingAudio && { backgroundColor: theme.rose }]} />
-              ))}
-            </View>
-            <Text style={styles.voiceTime}>0:15</Text>
-          </TouchableOpacity>
-        ) : null}
-
-        {post.image ? <Image source={{ uri: post.image }} style={styles.media} /> : null}
-        <View style={styles.actionsRow}>
-          <TouchableOpacity onPress={toggleLike} style={styles.action} testID={`like-${post.post_id}`}>
-            <Ionicons name={liked ? "heart" : "heart-outline"} size={20} color={liked ? theme.rose : theme.textDim} />
-            <Text style={[styles.actionText, liked ? { color: theme.rose } : null]}>{count}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={goPost} style={styles.action} testID={`comment-${post.post_id}`}>
-            <Ionicons name="chatbubble-outline" size={18} color={theme.textDim} />
-            <Text style={styles.actionText}>{post.comments_count}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={sendVibe} style={[styles.action, styles.vibeAction]} testID={`sendvibe-${post.post_id}`}>
-            <Ionicons name="flash" size={18} color={theme.cyan} />
-            <Text style={[styles.actionText, { color: theme.cyan, fontWeight: "700" }]}>Vibe Gönder</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Pressable>
-  );
-}
 
 const styles = StyleSheet.create({
   wrap: {
