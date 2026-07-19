@@ -1636,8 +1636,8 @@ async def send_message(match_id: str, payload: MessageCreate, current=Depends(ge
         safe, reason = await moderate_text(payload.text, current["user_id"])
         if not safe:
             raise HTTPException(status_code=400, detail=f"Message rejected: {reason}")
-    elif not payload.image:
-        raise HTTPException(status_code=400, detail="Mesaj içeriği veya fotoğraf olmalıdır.")
+    elif not payload.image and not payload.voice_note and not payload.video_note:
+        raise HTTPException(status_code=400, detail="Mesaj içeriği, fotoğraf veya sesli mesaj olmalıdır.")
 
     doc = {
         "message_id": new_id("msg"),

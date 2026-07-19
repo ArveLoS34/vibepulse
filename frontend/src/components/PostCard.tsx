@@ -1,5 +1,5 @@
-import React from "react";
-import { Image, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useState } from "react";
+import { Image, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Avatar } from "@/src/components/Avatar";
@@ -14,6 +14,7 @@ export type PostAuthor = {
   avatar: string;
   vibe_status?: string;
   is_founder?: boolean;
+  is_premium?: boolean;
 };
 
 export type Post = {
@@ -47,6 +48,7 @@ export function PostCard({ post, onChange }: { post: Post; onChange?: (p: Post) 
   const [liked, setLiked] = React.useState(post.liked_by_me);
   const [count, setCount] = React.useState(post.likes_count);
   const [playingAudio, setPlayingAudio] = React.useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   React.useEffect(() => {
     setLiked(post.liked_by_me);
@@ -123,11 +125,20 @@ export function PostCard({ post, onChange }: { post: Post; onChange?: (p: Post) 
             <Text style={styles.name} numberOfLines={1}>
               {post.author.name || "İsimsiz"}
             </Text>
+
+            {/* VIP Orange Tick Badge (Tapping shows "VibePulse Premium") */}
+            {post.author?.is_premium ? (
+              <TouchableOpacity onPress={() => alert("VibePulse Premium")} style={{ paddingHorizontal: 2 }}>
+                <Ionicons name="checkmark-circle" size={16} color="#FF8C00" />
+              </TouchableOpacity>
+            ) : null}
+
             {isFounderAuthor ? (
               <View style={styles.founderPill}>
                 <Text style={styles.founderText}>👑 Kurucu</Text>
               </View>
             ) : null}
+
             <Text style={styles.handle} numberOfLines={1}>
               @{post.author.handle}
             </Text>
@@ -141,6 +152,68 @@ export function PostCard({ post, onChange }: { post: Post; onChange?: (p: Post) 
             </TouchableOpacity>
           ) : null}
         </View>
+        {post.author.vibe_status ? (
+          <View style={styles.vibePill}>
+            <Text style={styles.vibeText}>✨ {post.author.vibe_status}</Text>
+          </View>
+        ) : null}
+        <Text style={styles.body}>{post.text}</Text>
+
+        {post.voice_note ? (
+          <TouchableOpacity
+            onPress={toggleAudio}
+            style={styles.voicePlayer}
+            testID={`voice-${post.post_id}`}
+          >
+            <View style={styles.voicePlayBtn}>
+              <Ionicons name={playingAudio ? "pause" : "play"} size={16} color="#fff" />
+            </View>
+            <View style={styles.voiceWaveform}>
+              {[12, 20, 8, 24, 16, 22, 10, 18, 14, 24, 8, 16, 22, 10].map((h, i) => (
+                <View key={i} style={[styles.waveBar, { height: h }, playingAudio && { backgroundColor: theme.rose }]} />
+              ))}
+            </View>
+            <Text style={styles.voiceTime}>0:15</Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {/* Post Image with Lightbox Zoom Modal */}
+        {post.image ? (
+          <TouchableOpacity onPress={() => setLightboxOpen(true)}>
+            <Image source={{ uri: post.image }} style={styles.media} />
+          </TouchableOpacity>
+        ) : null}
+
+        <View style={styles.actionsRow}>
+          <TouchableOpacity onPress={toggleLike} style={styles.action} testID={`like-${post.post_id}`}>
+            <Ionicons name={liked ? "heart" : "heart-outline"} size={20} color={liked ? theme.rose : theme.textDim} />
+            <Text style={[styles.actionText, liked ? { color: theme.rose } : null]}>{count}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={goPost} style={styles.action} testID={`comment-${post.post_id}`}>
+            <Ionicons name="chatbubble-outline" size={18} color={theme.textDim} />
+            <Text style={styles.actionText}>{post.comments_count}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={sendVibe} style={[styles.action, styles.vibeAction]} testID={`sendvibe-${post.post_id}`}>
+            <Ionicons name="flash" size={18} color={theme.cyan} />
+            <Text style={[styles.actionText, { color: theme.cyan, fontWeight: "700" }]}>Vibe Gönder</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Full Screen Photo Zoom Modal */}
+      {post.image && (
+        <Modal visible={lightboxOpen} transparent animationType="fade" onRequestClose={() => setLightboxOpen(false)}>
+          <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.95)", justifyContent: "center", alignItems: "center" }}>
+            <TouchableOpacity onPress={() => setLightboxOpen(false)} style={{ position: "absolute", top: 40, right: 20, zIndex: 10, padding: 10 }}>
+              <Ionicons name="close-circle" size={36} color="#fff" />
+            </TouchableOpacity>
+            <Image source={{ uri: post.image }} style={{ width: "95%", height: "80%", resizeMode: "contain" }} />
+          </View>
+        </Modal>
+      )}
+    </Pressable>
+  );
+}
         {post.author.vibe_status ? (
           <View style={styles.vibePill}>
             <Text style={styles.vibeText}>✨ {post.author.vibe_status}</Text>

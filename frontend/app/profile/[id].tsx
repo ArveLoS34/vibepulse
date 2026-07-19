@@ -36,6 +36,8 @@ export default function PublicProfile() {
   const [aiReportModal, setAiReportModal] = useState(false);
   const [aiReportData, setAiReportData] = useState<any>(null);
   const [aiReportBusy, setAiReportBusy] = useState(false);
+  const [showInterests, setShowInterests] = useState(false);
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
   const loadAiReport = async () => {
     if (!user) return;
@@ -183,8 +185,7 @@ export default function PublicProfile() {
           />
           <View style={styles.head}>
             <TouchableOpacity
-              onPress={() => userStoryGroup ? setStoryModalOpen(true) : null}
-              disabled={!userStoryGroup}
+              onPress={() => userStoryGroup ? setStoryModalOpen(true) : (user.photos?.[0] ? setZoomedImage(user.photos[0]) : null)}
               style={{ position: "relative" }}
             >
               <Avatar uri={user.photos?.[0]} name={user.name || ""} size={110} ring={!!userStoryGroup} />
@@ -197,6 +198,21 @@ export default function PublicProfile() {
 
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.md }}>
               <Text style={styles.name}>{user.name}</Text>
+
+              {/* Email Verification Green Checkmark Tick */}
+              {user.is_email_verified ? (
+                <TouchableOpacity onPress={() => alert("✅ E-posta Adresi Doğrulanmış Güvenli Hesap")}>
+                  <Ionicons name="checkmark-circle" size={22} color="#10B981" />
+                </TouchableOpacity>
+              ) : null}
+
+              {/* VIP Orange Verification Tick */}
+              {user.is_premium ? (
+                <TouchableOpacity onPress={() => alert("VibePulse Premium")}>
+                  <Ionicons name="checkmark-circle" size={22} color="#FF8C00" />
+                </TouchableOpacity>
+              ) : null}
+
               {user.is_founder ? (
                 <View style={styles.founderPill}>
                   <Text style={styles.founderText}>👑 Kurucu</Text>
@@ -298,12 +314,26 @@ export default function PublicProfile() {
               ) : null}
             </View>
             {user.interests && user.interests.length > 0 ? (
-              <View style={styles.interestsRow}>
-                {user.interests.map((i: string) => (
-                  <View key={i} style={styles.interestChip}>
-                    <Text style={styles.interestText}>{i}</Text>
+              <View style={{ width: "100%", marginTop: spacing.md, alignItems: "center" }}>
+                <TouchableOpacity
+                  onPress={() => setShowInterests(!showInterests)}
+                  style={styles.interestsToggleBtn}
+                >
+                  <Ionicons name="sparkles" size={14} color="#8B5CF6" />
+                  <Text style={styles.interestsToggleText}>
+                    İlgi Alanları ({user.interests.length}) {showInterests ? "▲" : "▼"}
+                  </Text>
+                </TouchableOpacity>
+
+                {showInterests ? (
+                  <View style={styles.interestsRow}>
+                    {user.interests.map((i: string) => (
+                      <View key={i} style={styles.interestChip}>
+                        <Text style={styles.interestText}>{i}</Text>
+                      </View>
+                    ))}
                   </View>
-                ))}
+                ) : null}
               </View>
             ) : null}
             <Pressable onPress={sendVibe} testID="send-vibe-btn" style={{ marginTop: spacing.lg }}>
@@ -324,7 +354,9 @@ export default function PublicProfile() {
               <Text style={styles.section}>Fotoğraflar</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
                 {user.photos.map((p: string, i: number) => (
-                  <Image key={i} source={{ uri: p }} style={styles.gridPhoto} />
+                  <TouchableOpacity key={i} onPress={() => setZoomedImage(p)}>
+                    <Image source={{ uri: p }} style={styles.gridPhoto} />
+                  </TouchableOpacity>
                 ))}
               </ScrollView>
             </View>
@@ -442,6 +474,15 @@ export default function PublicProfile() {
             </ScrollView>
           )}
         </SafeAreaView>
+      </Modal>
+      {/* Full Screen Photo Zoom Modal */}
+      <Modal visible={!!zoomedImage} transparent animationType="fade" onRequestClose={() => setZoomedImage(null)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.95)", justifyContent: "center", alignItems: "center" }}>
+          <TouchableOpacity onPress={() => setZoomedImage(null)} style={{ position: "absolute", top: 40, right: 20, zIndex: 10, padding: 10 }}>
+            <Ionicons name="close-circle" size={36} color="#fff" />
+          </TouchableOpacity>
+          {zoomedImage ? <Image source={{ uri: zoomedImage }} style={{ width: "95%", height: "80%", resizeMode: "contain" }} /> : null}
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -602,6 +643,18 @@ const styles = StyleSheet.create({
   bio: { color: theme.text, textAlign: "center", marginTop: spacing.md, fontSize: 15, lineHeight: 22 },
   metaRow: { flexDirection: "row", gap: 12, marginTop: spacing.md },
   meta: { color: theme.textDim, fontSize: 13 },
+  interestsToggleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(139, 92, 246, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(139, 92, 246, 0.3)",
+  },
+  interestsToggleText: { color: "#8B5CF6", fontWeight: "800", fontSize: 13 },
   interestsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: spacing.md, justifyContent: "center" },
   interestChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border },
   interestText: { color: theme.text, fontSize: 12, fontWeight: "600" },

@@ -17,6 +17,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { api } from "@/src/lib/api";
+import { useAuth } from "@/src/context/AuthContext";
 import { theme, radius, spacing } from "@/src/lib/theme";
 import { Avatar } from "@/src/components/Avatar";
 import type { VibeUser } from "@/src/context/AuthContext";
@@ -36,11 +37,13 @@ const DISTANCES = [
 
 export default function DiscoverScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDistance, setSelectedDistance] = useState<number | null>(null);
   const [squadsActive, setSquadsActive] = useState(false);
   const [matchInfo, setMatchInfo] = useState<{ matchId: string; user: Card } | null>(null);
+  const [lastSwipedCard, setLastSwipedCard] = useState<Card | null>(null);
   const pan = useRef(new Animated.ValueXY()).current;
   const [busy, setBusy] = useState(false);
 
@@ -79,6 +82,7 @@ export default function DiscoverScreen() {
         useNativeDriver: !isWeb,
       }).start(async () => {
         const targetId = top.user_id;
+        setLastSwipedCard(top);
         setCards((c) => c.slice(1));
         pan.setValue({ x: 0, y: 0 });
         try {
@@ -112,6 +116,20 @@ export default function DiscoverScreen() {
     })
   ).current;
 
+  const rewind = () => {
+    if (!user?.is_premium && !user?.is_admin) {
+      alert("↺ Geri Alma (Rewind) Özelliği\n\nPas geçtiğin son profili geri getirmek için VibePulse Premium üyesi olmalısın!");
+      router.push("/premium");
+      return;
+    }
+    if (lastSwipedCard) {
+      setCards((c) => [lastSwipedCard, ...c]);
+      setLastSwipedCard(null);
+      alert("Pas geçilen son profil geri getirildi! ↺");
+    } else {
+      alert("Geri alınacak son profil bulunamadı.");
+    }
+  };
   const rotate = pan.x.interpolate({ inputRange: [-W, 0, W], outputRange: ["-15deg", "0deg", "15deg"] });
   const likeOpacity = pan.x.interpolate({ inputRange: [0, SWIPE_THRESHOLD], outputRange: [0, 1], extrapolate: "clamp" });
   const nopeOpacity = pan.x.interpolate({
@@ -182,6 +200,13 @@ export default function DiscoverScreen() {
 
       {top && !loading && (
         <View style={styles.controls}>
+          <TouchableOpacity
+            testID="swipe-rewind"
+            style={[styles.ctrl, styles.ctrlRewind]}
+            onPress={rewind}
+          >
+            <Ionicons name="refresh" size={24} color="#F59E0B" />
+          </TouchableOpacity>
           <TouchableOpacity
             testID="swipe-pass"
             style={[styles.ctrl, styles.ctrlPass]}
@@ -427,6 +452,7 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
   },
   ctrlPass: { borderColor: theme.danger },
+  ctrlRewind: { borderColor: "#F59E0B", width: 52, height: 52, borderRadius: 26 },
   ctrlSuper: { borderColor: theme.cyan, width: 52, height: 52, borderRadius: 26 },
   ctrlLike: { borderColor: theme.rose },
   empty: { alignItems: "center", gap: 10 },

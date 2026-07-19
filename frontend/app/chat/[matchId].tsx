@@ -68,6 +68,15 @@ export default function ChatScreen() {
   const [venueModalOpen, setVenueModalOpen] = useState(false);
   const [venues, setVenues] = useState<any[]>([]);
 
+  // Virtual House / Roommate Simulation State (Item 7)
+  const [homeModalOpen, setHomeModalOpen] = useState(false);
+  const [selectedHomeStyle, setSelectedHomeStyle] = useState("Cyberpunk Neon Loft 🌆");
+  const [selectedBudget, setSelectedBudget] = useState("Ortak Paylaşımlı 🤝");
+  const [selectedRule, setSelectedRule] = useState("🐶 Evcil Hayvan Serbest");
+
+  // Lightbox Zoom State (Item 5)
+  const [chatZoomedImage, setChatZoomedImage] = useState<string | null>(null);
+
   // Media Attachment State
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [recordingVoice, setRecordingVoice] = useState(false);
@@ -92,16 +101,18 @@ export default function ChatScreen() {
     } catch {}
   };
 
-  const handleSuggestVenue = async (venue: any) => {
+  const sendVirtualHomeResult = async () => {
+    const score = Math.floor(Math.random() * 8) + 92; // 92-99% compatibility score
+    const resultText = `🏡 Sanal Ev Kurma Simülasyonu Sonucu (%${score} Birlikte Yaşam Uyumu! ✨)\n\n• Ev Dekorasyonu: ${selectedHomeStyle}\n• Bütçe Planı: ${selectedBudget}\n• Ev Kuralı: ${selectedRule}\n\nHarika bir yaşam alanı kurduk! Senin düşüncelerin neler? 😊`;
+    setHomeModalOpen(false);
     try {
-      await api(`/matches/${matchId}/suggest-venue`, {
+      await api(`/matches/${matchId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ venue_name: venue.name, address: venue.address }),
+        body: JSON.stringify({ text: resultText }),
       });
-      setVenueModalOpen(false);
       load();
-    } catch (e: any) {
-      alert(e?.message || "Buluşma önerisi gönderilemedi");
+    } catch {
+      alert("Sanal ev simülasyonu sonucu gönderilemedi.");
     }
   };
 
@@ -325,9 +336,14 @@ export default function ChatScreen() {
           <Text style={{ color: "#10B981", fontSize: 11, fontWeight: "800" }}>☕ Buluş</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity onPress={() => setHomeModalOpen(true)} style={styles.homeBtn}>
+          <Ionicons name="home" size={16} color="#06B6D4" />
+          <Text style={{ color: "#06B6D4", fontSize: 11, fontWeight: "800" }}>🏡 Ev Kur</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity onPress={loadWingman} style={styles.wingmanBtn} testID="chat-ai-wingman">
           <Ionicons name="sparkles" size={16} color="#F59E0B" />
-          <Text style={styles.wingmanText}>AI Wingman</Text>
+          <Text style={styles.wingmanText}>AI</Text>
         </TouchableOpacity>
       </View>
 
@@ -390,7 +406,9 @@ export default function ChatScreen() {
                       style={[styles.bubble, styles.mine]}
                     >
                       {item.image ? (
-                        <Image source={{ uri: item.image }} style={styles.chatImage} />
+                        <TouchableOpacity onPress={() => setChatZoomedImage(item.image)}>
+                          <Image source={{ uri: item.image }} style={styles.chatImage} />
+                        </TouchableOpacity>
                       ) : null}
 
                       {item.voice_note ? (
@@ -419,7 +437,9 @@ export default function ChatScreen() {
                   ) : (
                     <View style={[styles.bubble, styles.theirs]}>
                       {item.image ? (
-                        <Image source={{ uri: item.image }} style={styles.chatImage} />
+                        <TouchableOpacity onPress={() => setChatZoomedImage(item.image)}>
+                          <Image source={{ uri: item.image }} style={styles.chatImage} />
+                        </TouchableOpacity>
                       ) : null}
 
                       {item.voice_note ? (
@@ -553,6 +573,88 @@ export default function ChatScreen() {
           />
         </SafeAreaView>
       </Modal>
+      {/* Virtual Roommate / Nesting Simulation Modal (Item 7) */}
+      <Modal visible={homeModalOpen} animationType="slide" onRequestClose={() => setHomeModalOpen(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>🏡 Sanal Ev Kurma Simülasyonu</Text>
+            <TouchableOpacity onPress={() => setHomeModalOpen(false)} style={{ padding: 6 }}>
+              <Ionicons name="close" size={24} color={theme.text} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: spacing.xl, gap: spacing.lg }}>
+            <Text style={{ color: theme.textDim, fontSize: 14, lineHeight: 20 }}>
+              Ortak yaşam zevklerinizi ve ev tarzınızı belirleyin, yapay zeka birlikte yaşam uyum skorunuzu hesaplasın!
+            </Text>
+
+            {/* Home Decoration Style */}
+            <Text style={styles.optionSectionTitle}>1. Ev Dekorasyon Tarzınız</Text>
+            <View style={{ gap: 8 }}>
+              {["Minimalist İskandinav 🛋️", "Cyberpunk Neon Loft 🌆", "Doğa & Boho Chic 🌿", "Modern Lüks Penthouse 🏙️"].map((st) => (
+                <TouchableOpacity
+                  key={st}
+                  onPress={() => setSelectedHomeStyle(st)}
+                  style={[styles.simChip, selectedHomeStyle === st && styles.simChipActive]}
+                >
+                  <Text style={[styles.simChipText, selectedHomeStyle === st && styles.simChipTextActive]}>{st}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* House Budget */}
+            <Text style={styles.optionSectionTitle}>2. Ortak Bütçe Planı</Text>
+            <View style={{ gap: 8 }}>
+              {["Ortak Paylaşımlı 🤝", "Esnek & Lüks 💎", "Minimal Ekonomi 💡"].map((b) => (
+                <TouchableOpacity
+                  key={b}
+                  onPress={() => setSelectedBudget(b)}
+                  style={[styles.simChip, selectedBudget === b && styles.simChipActive]}
+                >
+                  <Text style={[styles.simChipText, selectedBudget === b && styles.simChipTextActive]}>{b}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* House Rules */}
+            <Text style={styles.optionSectionTitle}>3. Temel Ev Kuralı</Text>
+            <View style={{ gap: 8 }}>
+              {["🐶 Evcil Hayvan Serbest", "🎉 Hafta Sonu Partileri Serbest", "🔇 23:00 Sessizlik Zamanı"].map((r) => (
+                <TouchableOpacity
+                  key={r}
+                  onPress={() => setSelectedRule(r)}
+                  style={[styles.simChip, selectedRule === r && styles.simChipActive]}
+                >
+                  <Text style={[styles.simChipText, selectedRule === r && styles.simChipTextActive]}>{r}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity onPress={sendVirtualHomeResult} style={{ marginTop: spacing.lg }}>
+              <LinearGradient
+                colors={["#06B6D4", "#3B82F6"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ paddingVertical: 16, alignItems: "center", borderRadius: radius.pill }}
+              >
+                <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}>
+                  Sanal Evi Kur & Uyum Skorunu Sohbete Gönder 🚀
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Lightbox Image Viewer Modal (Item 5) */}
+      <Modal visible={!!chatZoomedImage} transparent animationType="fade" onRequestClose={() => setChatZoomedImage(null)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.95)", justifyContent: "center", alignItems: "center" }}>
+          <TouchableOpacity onPress={() => setChatZoomedImage(null)} style={{ position: "absolute", top: 40, right: 20, zIndex: 10, padding: 10 }}>
+            <Ionicons name="close-circle" size={36} color="#fff" />
+          </TouchableOpacity>
+          {chatZoomedImage ? <Image source={{ uri: chatZoomedImage }} style={{ width: "95%", height: "80%", resizeMode: "contain" }} /> : null}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -581,6 +683,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(16, 185, 129, 0.4)",
   },
+  homeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(6, 182, 212, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(6, 182, 212, 0.4)",
+  },
+  simChip: {
+    padding: 12,
+    borderRadius: radius.md,
+    backgroundColor: theme.card,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  simChipActive: { backgroundColor: "rgba(6, 182, 212, 0.15)", borderColor: theme.cyan },
+  simChipText: { color: theme.textDim, fontSize: 14, fontWeight: "600" },
+  simChipTextActive: { color: theme.cyan, fontWeight: "800" },
+  optionSectionTitle: { color: theme.text, fontSize: 13, fontWeight: "800", marginTop: spacing.sm },
   wingmanBtn: {
     flexDirection: "row",
     alignItems: "center",

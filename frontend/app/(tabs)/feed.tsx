@@ -9,6 +9,7 @@ import { PostCard, Post } from "@/src/components/PostCard";
 import { ComposeModal } from "@/src/components/ComposeModal";
 import { Avatar } from "@/src/components/Avatar";
 import { api } from "@/src/lib/api";
+import { storage } from "@/src/utils/storage";
 import { useAuth } from "@/src/context/AuthContext";
 import { theme, radius, spacing } from "@/src/lib/theme";
 
@@ -243,9 +244,23 @@ export default function FeedScreen() {
     }
   };
 
+  useEffect(() => {
+    async function loadSavedViewedStories() {
+      try {
+        const saved = await storage.get<string[]>("vibepulse.viewed_stories", []);
+        if (saved && Array.isArray(saved)) setViewedStoryUserIds(saved);
+      } catch {}
+    }
+    loadSavedViewedStories();
+  }, []);
+
   const openStoryViewer = (group: any) => {
     if (group.user?.user_id) {
-      setViewedStoryUserIds((prev) => Array.from(new Set([...prev, group.user.user_id])));
+      setViewedStoryUserIds((prev) => {
+        const next = Array.from(new Set([...prev, group.user.user_id]));
+        storage.set("vibepulse.viewed_stories", next);
+        return next;
+      });
     }
     const sortedStories = [...(group.stories || [])].sort(
       (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()

@@ -155,8 +155,16 @@ export default function PremiumScreen() {
           <View style={styles.featureRow}>
             <Ionicons name="infinite" size={24} color={theme.cyan} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.featureTitle}>Sınırsız Kaydırma</Text>
-              <Text style={styles.featureSub}>Günlük eşleşme ve beğeni sınırına takılma.</Text>
+              <Text style={styles.featureTitle}>Sınırsız Beğeni & Kaydırma</Text>
+              <Text style={styles.featureSub}>Günlük eşleşme ve beğeni sınırına takılmadan sınırsız profili sağa kaydırın.</Text>
+            </View>
+          </View>
+
+          <View style={styles.featureRow}>
+            <Ionicons name="refresh" size={24} color="#10B981" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.featureTitle}>Geri Alma (Rewind ↺)</Text>
+              <Text style={styles.featureSub}>Yanlışlıkla sola kaydırdığınız (pas geçtiğiniz) profilleri tek tıkla geri getirin.</Text>
             </View>
           </View>
         </View>

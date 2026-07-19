@@ -85,6 +85,8 @@ export default function MeScreen() {
   const [userListModalOpen, setUserListModalOpen] = useState(false);
   const [adminUsers, setAdminUsers] = useState<any[]>([]);
   const [userListTitle, setUserListTitle] = useState("");
+  const [showInterests, setShowInterests] = useState(false);
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
   const fetchAdminUsers = async (filter: "all" | "vip") => {
     try {
@@ -180,32 +182,42 @@ export default function MeScreen() {
           style={styles.banner}
         />
         <View style={styles.profileHead}>
-          <Avatar uri={user.photos?.[0]} name={user.name || ""} size={110} ring />
-          <Text style={styles.name}>
-            {user.name} {user.age ? <Text style={styles.age}>, {user.age}</Text> : null}
-          </Text>
+          <TouchableOpacity onPress={() => user.photos?.[0] ? setZoomedImage(user.photos[0]) : null}>
+            <Avatar uri={user.photos?.[0]} name={user.name || ""} size={110} ring />
+          </TouchableOpacity>
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.md }}>
+            <Text style={styles.name}>
+              {user.name} {user.age ? <Text style={styles.age}>, {user.age}</Text> : null}
+            </Text>
+
+            {/* Email Verification Green Tick */}
+            <TouchableOpacity
+              onPress={user.is_email_verified ? () => alert("✅ E-posta Adresi Doğrulanmış Güvenli Hesap") : handleStartVerify}
+              disabled={verifyBusy}
+            >
+              <Ionicons
+                name={user.is_email_verified ? "checkmark-circle" : "alert-circle"}
+                size={22}
+                color={user.is_email_verified ? "#10B981" : "#F59E0B"}
+              />
+            </TouchableOpacity>
+
+            {/* VIP Orange Verification Tick */}
+            {user.is_premium ? (
+              <TouchableOpacity onPress={() => alert("VibePulse Premium")}>
+                <Ionicons name="checkmark-circle" size={22} color="#FF8C00" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
           {(user.is_founder || user.email?.toLowerCase() === "ertackeser3453@gmail.com") ? (
             <View style={styles.founderBanner}>
               <Text style={styles.founderBannerText}>👑 VibePulse Kurucusu & Sahibi</Text>
             </View>
           ) : null}
+
           <Text style={styles.handle}>@{user.handle}</Text>
-          
-          {/* Email verification indicator */}
-          <TouchableOpacity
-            onPress={user.is_email_verified ? undefined : handleStartVerify}
-            disabled={verifyBusy}
-            style={styles.emailPill}
-          >
-            <Ionicons
-              name={user.is_email_verified ? "checkmark-circle" : "alert-circle"}
-              size={14}
-              color={user.is_email_verified ? "#10B981" : "#F59E0B"}
-            />
-            <Text style={[styles.emailPillText, { color: user.is_email_verified ? "#10B981" : "#F59E0B" }]}>
-              {user.is_email_verified ? "E-posta Doğrulandı" : "E-postanı Doğrula (Şimdi Tıkla)"}
-            </Text>
-          </TouchableOpacity>
 
           {user.vibe_status ? (
             <View style={styles.vibePill}>
@@ -272,12 +284,26 @@ export default function MeScreen() {
           ) : null}
 
           {user.interests && user.interests.length > 0 ? (
-            <View style={styles.interestsRow}>
-              {user.interests.map((i) => (
-                <View key={i} style={styles.interestChip}>
-                  <Text style={styles.interestText}>{i}</Text>
+            <View style={{ width: "100%", marginTop: spacing.md, alignItems: "center" }}>
+              <TouchableOpacity
+                onPress={() => setShowInterests(!showInterests)}
+                style={styles.interestsToggleBtn}
+              >
+                <Ionicons name="sparkles" size={14} color="#8B5CF6" />
+                <Text style={styles.interestsToggleText}>
+                  İlgi Alanları ({user.interests.length}) {showInterests ? "▲" : "▼"}
+                </Text>
+              </TouchableOpacity>
+
+              {showInterests ? (
+                <View style={styles.interestsRow}>
+                  {user.interests.map((i) => (
+                    <View key={i} style={styles.interestChip}>
+                      <Text style={styles.interestText}>{i}</Text>
+                    </View>
+                  ))}
                 </View>
-              ))}
+              ) : null}
             </View>
           ) : null}
         </View>
@@ -291,7 +317,9 @@ export default function MeScreen() {
               contentContainerStyle={{ gap: 10, paddingRight: spacing.lg }}
             >
               {user.photos.map((p, i) => (
-                <Image key={i} source={{ uri: p }} style={styles.gridPhoto} />
+                <TouchableOpacity key={i} onPress={() => setZoomedImage(p)}>
+                  <Image source={{ uri: p }} style={styles.gridPhoto} />
+                </TouchableOpacity>
               ))}
             </ScrollView>
           </View>
@@ -562,6 +590,16 @@ export default function MeScreen() {
         </SafeAreaView>
       </Modal>
 
+      {/* Full Screen Photo Zoom Modal */}
+      <Modal visible={!!zoomedImage} transparent animationType="fade" onRequestClose={() => setZoomedImage(null)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.95)", justifyContent: "center", alignItems: "center" }}>
+          <TouchableOpacity onPress={() => setZoomedImage(null)} style={{ position: "absolute", top: 40, right: 20, zIndex: 10, padding: 10 }}>
+            <Ionicons name="close-circle" size={36} color="#fff" />
+          </TouchableOpacity>
+          {zoomedImage ? <Image source={{ uri: zoomedImage }} style={{ width: "95%", height: "80%", resizeMode: "contain" }} /> : null}
+        </View>
+      </Modal>
+
       <LanguageSelectorModal visible={langModalOpen} onClose={() => setLangModalOpen(false)} />
     </SafeAreaView>
   );
@@ -620,6 +658,18 @@ const styles = StyleSheet.create({
   intentPillText: { color: "#8B5CF6", fontWeight: "800", fontSize: 12 },
   bio: { color: theme.text, textAlign: "center", marginTop: spacing.md, fontSize: 15, lineHeight: 22 },
   meta: { color: theme.textDim, marginTop: spacing.md, fontSize: 13 },
+  interestsToggleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(139, 92, 246, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(139, 92, 246, 0.3)",
+  },
+  interestsToggleText: { color: "#8B5CF6", fontWeight: "800", fontSize: 13 },
   interestsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: spacing.md, justifyContent: "center" },
   interestChip: {
     paddingHorizontal: 10,

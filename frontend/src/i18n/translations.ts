@@ -4,7 +4,7 @@ export const translations = {
   tr: {
     welcome_title: "Düşünceleriyle\nAşık Ol.",
     welcome_sub: "Klasik flört uygulamalarını unut. İnsanların düşüncelerine, esprilerine ve müziklerine göre eşleşirsin.",
-    welcome_join: "Happen Katıl",
+    welcome_join: "Kayıt Ol",
     welcome_google: "Google ile Devam Et",
     welcome_login: "Giriş Yap",
     tagline: "Sadece görünüş değil. Zeka. Mizah. Vibe.",
