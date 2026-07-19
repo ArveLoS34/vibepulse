@@ -7,6 +7,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "@/src/context/AuthContext";
 import { useTranslation } from "@/src/i18n/LanguageContext";
 import { LanguageSelectorModal } from "@/src/components/LanguageSelectorModal";
+import { ChangelogModal } from "@/src/components/ChangelogModal";
 import { api } from "@/src/lib/api";
 import type { Post } from "@/src/components/PostCard";
 import { PostCard } from "@/src/components/PostCard";
@@ -30,6 +31,7 @@ export default function MeScreen() {
   const [verifyCode, setVerifyCode] = useState("");
   const [verifyBusy, setVerifyBusy] = useState(false);
   const [codeHint, setCodeHint] = useState<string | null>(null);
+  const [changelogOpen, setChangelogOpen] = useState(false);
 
   const handleStartVerify = async () => {
     setVerifyBusy(true);
@@ -157,6 +159,13 @@ export default function MeScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={["top"]}>
       <View style={styles.headerBar}>
+        <TouchableOpacity
+          testID="changelog-notebook-btn"
+          style={styles.iconBtn}
+          onPress={() => setChangelogOpen(true)}
+        >
+          <Ionicons name="journal-outline" size={20} color={theme.text} />
+        </TouchableOpacity>
         <TouchableOpacity
           testID="lang-select-btn"
           style={styles.iconBtn}
@@ -601,6 +610,7 @@ export default function MeScreen() {
       </Modal>
 
       <LanguageSelectorModal visible={langModalOpen} onClose={() => setLangModalOpen(false)} />
+      <ChangelogModal visible={changelogOpen} onClose={() => setChangelogOpen(false)} />
     </SafeAreaView>
   );
 }

@@ -7,6 +7,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { PostCard, Post } from "@/src/components/PostCard";
 import { ComposeModal } from "@/src/components/ComposeModal";
+import { ChangelogModal } from "@/src/components/ChangelogModal";
 import { Avatar } from "@/src/components/Avatar";
 import { api } from "@/src/lib/api";
 import { storage } from "@/src/utils/storage";
@@ -78,6 +79,7 @@ export default function FeedScreen() {
   const [notifModalOpen, setNotifModalOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
+  const [changelogOpen, setChangelogOpen] = useState(false);
 
   const loadNotifications = async () => {
     try {
@@ -426,21 +428,31 @@ export default function FeedScreen() {
           </LinearGradient>
           <Text style={styles.brand}>VibePulse</Text>
 
-          {/* Notification Center Bell Icon */}
-          <TouchableOpacity
-            onPress={() => {
-              loadNotifications();
-              setNotifModalOpen(true);
-            }}
-            style={styles.bellBtn}
-          >
-            <Ionicons name="notifications-outline" size={22} color={theme.text} />
-            {unreadNotifsCount > 0 ? (
-              <View style={styles.unreadBadge}>
-                <Text style={styles.unreadText}>{unreadNotifsCount}</Text>
-              </View>
-            ) : null}
-          </TouchableOpacity>
+          {/* Notification Center Bell Icon & Notebook Defter Icon */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <TouchableOpacity
+              onPress={() => setChangelogOpen(true)}
+              style={styles.bellBtn}
+              testID="changelog-notebook-btn"
+            >
+              <Ionicons name="journal-outline" size={22} color={theme.text} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                loadNotifications();
+                setNotifModalOpen(true);
+              }}
+              style={styles.bellBtn}
+            >
+              <Ionicons name="notifications-outline" size={22} color={theme.text} />
+              {unreadNotifsCount > 0 ? (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadText}>{unreadNotifsCount}</Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* 24h Vibe Stories Circles Bar */}
@@ -624,6 +636,7 @@ export default function FeedScreen() {
       </TouchableOpacity>
 
       <ComposeModal visible={composeOpen} onClose={() => setComposeOpen(false)} onPosted={load} />
+      <ChangelogModal visible={changelogOpen} onClose={() => setChangelogOpen(false)} />
 
       {/* Create VIP Live Audio Room Modal */}
       <Modal visible={createRoomOpen} animationType="slide" onRequestClose={() => setCreateRoomOpen(false)}>
