@@ -95,6 +95,10 @@ export function PostCard({ post, onChange }: { post: Post; onChange?: (p: Post) 
   const goProfile = () => router.push({ pathname: "/profile/[id]", params: { id: post.author.user_id } });
 
   const sendVibe = async () => {
+    if (post.author?.user_id === user?.user_id) {
+      alert("Kendi gönderinize Vibe gönderemezsiniz. 😊");
+      return;
+    }
     try {
       const res = await api<{ matched: boolean; match: any }>("/swipes", {
         method: "POST",
@@ -106,8 +110,8 @@ export function PostCard({ post, onChange }: { post: Post; onChange?: (p: Post) 
       } else {
         alert(`✨ ${post.author.name || "Kullanıcıya"} Vibe gönderildi!`);
       }
-    } catch {
-      router.push({ pathname: "/profile/[id]", params: { id: post.author.user_id } });
+    } catch (e: any) {
+      alert(e?.message || "Vibe gönderilemedi");
     }
   };
 

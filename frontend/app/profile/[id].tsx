@@ -117,6 +117,10 @@ export default function PublicProfile() {
 
   const sendVibe = async () => {
     if (!user) return;
+    if (user.user_id === me?.user_id) {
+      alert("Kendi profilinize Vibe gönderemezsiniz. 😊");
+      return;
+    }
     try {
       const res = await api<{ matched: boolean; match: any }>("/swipes", {
         method: "POST",
