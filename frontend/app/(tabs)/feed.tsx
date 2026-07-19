@@ -249,7 +249,7 @@ export default function FeedScreen() {
   useEffect(() => {
     async function loadSavedViewedStories() {
       try {
-        const saved = await storage.get<string[]>("vibepulse.viewed_stories", []);
+        const saved = await storage.getItem<string[]>("vibepulse.viewed_stories", []);
         if (saved && Array.isArray(saved)) setViewedStoryUserIds(saved);
       } catch {}
     }
@@ -260,7 +260,7 @@ export default function FeedScreen() {
     if (group.user?.user_id) {
       setViewedStoryUserIds((prev) => {
         const next = Array.from(new Set([...prev, group.user.user_id]));
-        storage.set("vibepulse.viewed_stories", next);
+        storage.setItem("vibepulse.viewed_stories", next);
         return next;
       });
     }
