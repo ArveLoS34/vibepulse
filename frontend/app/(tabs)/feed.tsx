@@ -322,6 +322,36 @@ export default function FeedScreen() {
     setStoryReplyText("");
   };
 
+  const goToNextStoryOrUser = () => {
+    if (!activeStoryGroup) return;
+    if (activeStoryIdx < activeStoryGroup.stories.length - 1) {
+      setActiveStoryIdx((i) => i + 1);
+    } else {
+      const currentGroupIdx = stories.findIndex(
+        (st) => st.user?.user_id === activeStoryGroup.user?.user_id
+      );
+      if (currentGroupIdx !== -1 && currentGroupIdx < stories.length - 1) {
+        openStoryViewer(stories[currentGroupIdx + 1]);
+      } else {
+        setActiveStoryGroup(null);
+      }
+    }
+  };
+
+  const goToPrevStoryOrUser = () => {
+    if (!activeStoryGroup) return;
+    if (activeStoryIdx > 0) {
+      setActiveStoryIdx((i) => i - 1);
+    } else {
+      const currentGroupIdx = stories.findIndex(
+        (st) => st.user?.user_id === activeStoryGroup.user?.user_id
+      );
+      if (currentGroupIdx > 0) {
+        openStoryViewer(stories[currentGroupIdx - 1]);
+      }
+    }
+  };
+
   const [speedModalOpen, setSpeedModalOpen] = useState(false);
   const [speedStatus, setSpeedStatus] = useState<"waiting" | "matched" | "idle">("idle");
   const [speedTimerSec, setSpeedTimerSec] = useState(0);
@@ -960,8 +990,11 @@ export default function FeedScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Story Content Card with Photo/Video Media */}
+              {/* Story Content Card with Photo/Video Media & Left/Right Swipe Areas */}
               <View style={styles.storyBody}>
+                <TouchableOpacity onPress={goToPrevStoryOrUser} style={styles.storyNavLeftTouch} />
+                <TouchableOpacity onPress={goToNextStoryOrUser} style={styles.storyNavRightTouch} />
+
                 {activeStoryGroup.stories[activeStoryIdx]?.image ? (
                   <Image source={{ uri: activeStoryGroup.stories[activeStoryIdx].image }} style={styles.storyFullMedia} />
                 ) : null}
@@ -1297,7 +1330,9 @@ const styles = StyleSheet.create({
   storyBarRow: { flexDirection: "row", gap: 4, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
   storyBar: { flex: 1, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.2)" },
   storyAuthorRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingTop: spacing.md },
-  storyBody: { flex: 1, justifyContent: "center", alignItems: "center", padding: spacing.md },
+  storyBody: { flex: 1, justifyContent: "center", alignItems: "center", padding: spacing.md, position: "relative" },
+  storyNavLeftTouch: { position: "absolute", top: 0, bottom: 0, left: 0, width: "35%", zIndex: 10 },
+  storyNavRightTouch: { position: "absolute", top: 0, bottom: 0, right: 0, width: "65%", zIndex: 10 },
   storyFullMedia: { width: "100%", height: 380, borderRadius: radius.lg, resizeMode: "contain" },
   storyCard: {
     padding: spacing.xl,

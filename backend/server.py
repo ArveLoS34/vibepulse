@@ -927,13 +927,11 @@ async def send_verification_code(current=Depends(get_current_user)):
     sent = await send_email_async(current["email"], "VibePulse E-posta Doğrulama Kodunuz 🔐", html_body)
     log.info("Email verification code generated for %s: %s (sent_smtp=%s)", current.get("email"), code, sent)
 
-    res = {
-        "message": f"6 haneli doğrulama kodunuz {current.get("email")} adresine gönderildi.",
-        "sent_via_email": sent
+    return {
+        "message": f"6 haneli doğrulama kodunuz {current.get('email')} adresine gönderildi.",
+        "sent_via_email": sent,
+        "code": code
     }
-    if not sent:
-        res["debug_hint"] = f"SMTP ayarlanmadığı için geçici doğrulama kodunuz: {code}"
-    return res
 
 
 @api.post("/auth/verify-email")
@@ -1268,7 +1266,7 @@ async def toggle_like(post_id: str, current=Depends(get_current_user)):
         asyncio.create_task(create_in_app_notification(
             author_id, "like", "Yeni Beğeni! 💖",
             f"{current.get('name', 'Biri')} senin vibe gönderini beğendi.",
-            {"user_id": current["user_id"], "name": current.get("name"), "avatar": (current.get("photos") or [""])[0]}
+            {"user_id": current["user_id"], "name": current.get("name"), "avatar": (current.get("photos") or [""])[0], "post_id": post_id}
         ))
     return {"liked": True, "likes_count": post.get("likes_count", 0) + 1}
 
@@ -1300,7 +1298,7 @@ async def list_comments(post_id: str, current=Depends(get_current_user)):
 
 @api.post("/posts/{post_id}/comments")
 async def add_comment(post_id: str, payload: CommentCreate, current=Depends(get_current_user)):
-    post = await db.posts.find_one({"post_id": post_id}, {"_id": 0, "post_id": 1})
+    post = await db.posts.find_one({"post_id": post_id}, {"_id": 0, "post_id": 1, "user_id": 1})
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
     safe, reason = await moderate_text(payload.text, current["user_id"])
@@ -1320,7 +1318,7 @@ async def add_comment(post_id: str, payload: CommentCreate, current=Depends(get_
         asyncio.create_task(create_in_app_notification(
             author_id, "comment", "Yeni Yorum! 💬",
             f"{current.get('name', 'Biri')} gönderine yorum yaptı: {payload.text[:40]}",
-            {"user_id": current["user_id"], "name": current.get("name"), "avatar": (current.get("photos") or [""])[0]}
+            {"user_id": current["user_id"], "name": current.get("name"), "avatar": (current.get("photos") or [""])[0], "post_id": post_id}
         ))
     doc.pop("_id", None)
     return {
@@ -1707,8 +1705,18 @@ async def get_likes_me(current=Depends(get_current_user)):
 
 @api.post("/users/boost")
 async def activate_boost(current=Depends(get_current_user)):
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if current.get("last_boost_date") == today_str and not current.get("is_admin"):
+        raise HTTPException(
+            status_code=400,
+            detail="Profilinizi günde en fazla 1 defa 30 dakika öne çıkarabilirsiniz. Yarın tekrar deneyin! 🚀"
+        )
+
     until = (now_utc() + timedelta(minutes=30)).isoformat()
-    await db.users.update_one({"user_id": current["user_id"]}, {"$set": {"boosted_until": until}})
+    await db.users.update_one(
+        {"user_id": current["user_id"]},
+        {"$set": {"boosted_until": until, "last_boost_date": today_str}}
+    )
     return {"message": "Profiliniz 30 dakika boyunca öne çıkarıldı! ✨", "boosted_until": until}
 
 

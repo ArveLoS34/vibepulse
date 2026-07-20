@@ -50,6 +50,7 @@ export default function PublicProfile() {
   const [aiReportBusy, setAiReportBusy] = useState(false);
   const [showInterests, setShowInterests] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  const [zoomedImageIdx, setZoomedImageIdx] = useState(0);
 
   const loadAiReport = async () => {
     if (!user) return;
@@ -201,7 +202,7 @@ export default function PublicProfile() {
           />
           <View style={styles.head}>
             <TouchableOpacity
-              onPress={() => userStoryGroup ? setStoryModalOpen(true) : (user.photos?.[0] ? setZoomedImage(user.photos[0]) : null)}
+              onPress={() => userStoryGroup ? setStoryModalOpen(true) : (user.photos?.[0] ? (setZoomedImageIdx(0), setZoomedImage(user.photos[0])) : null)}
               style={{ position: "relative" }}
             >
               <Avatar uri={user.photos?.[0]} name={user.name || ""} size={110} ring={!!userStoryGroup} />
@@ -378,11 +379,11 @@ export default function PublicProfile() {
             <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.md }}>
               <Text style={styles.section}>Fotoğraflar</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                {user.photos.map((p: string, i: number) => (
-                  <TouchableOpacity key={i} onPress={() => setZoomedImage(p)}>
-                    <Image source={{ uri: p }} style={styles.gridPhoto} />
-                  </TouchableOpacity>
-                ))}
+              {user.photos.map((p: string, i: number) => (
+                <TouchableOpacity key={i} onPress={() => { setZoomedImageIdx(i); setZoomedImage(p); }}>
+                  <Image source={{ uri: p }} style={styles.gridPhoto} />
+                </TouchableOpacity>
+              ))}
               </ScrollView>
             </View>
           ) : null}
@@ -500,12 +501,41 @@ export default function PublicProfile() {
           )}
         </SafeAreaView>
       </Modal>
-      {/* Full Screen Photo Zoom Modal */}
+      {/* Full Screen Photo Zoom Modal with Left/Right Gallery Navigation */}
       <Modal visible={!!zoomedImage} transparent animationType="fade" onRequestClose={() => setZoomedImage(null)}>
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.95)", justifyContent: "center", alignItems: "center" }}>
-          <TouchableOpacity onPress={() => setZoomedImage(null)} style={{ position: "absolute", top: 40, right: 20, zIndex: 10, padding: 10 }}>
+          <TouchableOpacity onPress={() => setZoomedImage(null)} style={{ position: "absolute", top: 40, right: 20, zIndex: 20, padding: 10 }}>
             <Ionicons name="close-circle" size={36} color="#fff" />
           </TouchableOpacity>
+
+          {/* Left Navigation Arrow */}
+          {user && user.photos && user.photos.length > 1 && zoomedImageIdx > 0 ? (
+            <TouchableOpacity
+              onPress={() => {
+                const nextIdx = zoomedImageIdx - 1;
+                setZoomedImageIdx(nextIdx);
+                setZoomedImage(user.photos![nextIdx]);
+              }}
+              style={{ position: "absolute", left: 15, zIndex: 20, padding: 12, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 24 }}
+            >
+              <Ionicons name="chevron-back" size={28} color="#fff" />
+            </TouchableOpacity>
+          ) : null}
+
+          {/* Right Navigation Arrow */}
+          {user && user.photos && user.photos.length > 1 && zoomedImageIdx < user.photos.length - 1 ? (
+            <TouchableOpacity
+              onPress={() => {
+                const nextIdx = zoomedImageIdx + 1;
+                setZoomedImageIdx(nextIdx);
+                setZoomedImage(user.photos![nextIdx]);
+              }}
+              style={{ position: "absolute", right: 15, zIndex: 20, padding: 12, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 24 }}
+            >
+              <Ionicons name="chevron-forward" size={28} color="#fff" />
+            </TouchableOpacity>
+          ) : null}
+
           {zoomedImage ? <Image source={{ uri: zoomedImage }} style={{ width: "95%", height: "80%", resizeMode: "contain" }} /> : null}
         </View>
       </Modal>

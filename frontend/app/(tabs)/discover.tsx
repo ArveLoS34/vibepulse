@@ -205,10 +205,10 @@ export default function DiscoverScreen() {
         <View style={styles.controls}>
           <TouchableOpacity
             testID="swipe-rewind"
-            style={[styles.ctrl, styles.ctrlRewind]}
+            style={[styles.ctrl, styles.ctrlRewind, (!user?.is_premium && !user?.is_admin) && { opacity: 0.6 }]}
             onPress={rewind}
           >
-            <Ionicons name="refresh" size={24} color="#F59E0B" />
+            <Ionicons name={(user?.is_premium || user?.is_admin) ? "refresh" : "lock-closed"} size={22} color="#F59E0B" />
           </TouchableOpacity>
           <TouchableOpacity
             testID="swipe-pass"

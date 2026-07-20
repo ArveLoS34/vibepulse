@@ -101,6 +101,7 @@ export default function MeScreen() {
   const [userListTitle, setUserListTitle] = useState("");
   const [showInterests, setShowInterests] = useState(false);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  const [zoomedImageIdx, setZoomedImageIdx] = useState(0);
 
   const fetchAdminUsers = async (filter: "all" | "vip") => {
     try {
@@ -203,7 +204,7 @@ export default function MeScreen() {
           style={styles.banner}
         />
         <View style={styles.profileHead}>
-          <TouchableOpacity onPress={() => user.photos?.[0] ? setZoomedImage(user.photos[0]) : null}>
+          <TouchableOpacity onPress={() => user.photos?.[0] ? (setZoomedImageIdx(0), setZoomedImage(user.photos[0])) : null}>
             <Avatar uri={user.photos?.[0]} name={user.name || ""} size={110} ring />
           </TouchableOpacity>
 
@@ -353,7 +354,7 @@ export default function MeScreen() {
               contentContainerStyle={{ gap: 10, paddingRight: spacing.lg }}
             >
               {user.photos.map((p, i) => (
-                <TouchableOpacity key={i} onPress={() => setZoomedImage(p)}>
+                <TouchableOpacity key={i} onPress={() => { setZoomedImageIdx(i); setZoomedImage(p); }}>
                   <Image source={{ uri: p }} style={styles.gridPhoto} />
                 </TouchableOpacity>
               ))}
@@ -626,12 +627,41 @@ export default function MeScreen() {
         </SafeAreaView>
       </Modal>
 
-      {/* Full Screen Photo Zoom Modal */}
+      {/* Full Screen Photo Zoom Modal with Left/Right Gallery Navigation */}
       <Modal visible={!!zoomedImage} transparent animationType="fade" onRequestClose={() => setZoomedImage(null)}>
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.95)", justifyContent: "center", alignItems: "center" }}>
-          <TouchableOpacity onPress={() => setZoomedImage(null)} style={{ position: "absolute", top: 40, right: 20, zIndex: 10, padding: 10 }}>
+          <TouchableOpacity onPress={() => setZoomedImage(null)} style={{ position: "absolute", top: 40, right: 20, zIndex: 20, padding: 10 }}>
             <Ionicons name="close-circle" size={36} color="#fff" />
           </TouchableOpacity>
+
+          {/* Left Navigation Arrow */}
+          {user.photos && user.photos.length > 1 && zoomedImageIdx > 0 ? (
+            <TouchableOpacity
+              onPress={() => {
+                const nextIdx = zoomedImageIdx - 1;
+                setZoomedImageIdx(nextIdx);
+                setZoomedImage(user.photos![nextIdx]);
+              }}
+              style={{ position: "absolute", left: 15, zIndex: 20, padding: 12, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 24 }}
+            >
+              <Ionicons name="chevron-back" size={28} color="#fff" />
+            </TouchableOpacity>
+          ) : null}
+
+          {/* Right Navigation Arrow */}
+          {user.photos && user.photos.length > 1 && zoomedImageIdx < user.photos.length - 1 ? (
+            <TouchableOpacity
+              onPress={() => {
+                const nextIdx = zoomedImageIdx + 1;
+                setZoomedImageIdx(nextIdx);
+                setZoomedImage(user.photos![nextIdx]);
+              }}
+              style={{ position: "absolute", right: 15, zIndex: 20, padding: 12, backgroundColor: "rgba(0,0,0,0.5)", borderRadius: 24 }}
+            >
+              <Ionicons name="chevron-forward" size={28} color="#fff" />
+            </TouchableOpacity>
+          ) : null}
+
           {zoomedImage ? <Image source={{ uri: zoomedImage }} style={{ width: "95%", height: "80%", resizeMode: "contain" }} /> : null}
         </View>
       </Modal>
