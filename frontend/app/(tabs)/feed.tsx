@@ -15,6 +15,7 @@ import { useAuth } from "@/src/context/AuthContext";
 import { theme, radius, spacing } from "@/src/lib/theme";
 
 const HASHTAGS = ["Tüm", "Yazılım", "Müzik", "Kahve", "Gece", "Sanat", "Eğlence"];
+const CURRENT_APP_VERSION = "v2.7.0";
 
 export default function FeedScreen() {
   const router = useRouter();
@@ -80,6 +81,7 @@ export default function FeedScreen() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
   const [changelogOpen, setChangelogOpen] = useState(false);
+  const [showUpdateBanner, setShowUpdateBanner] = useState(false);
 
   const loadNotifications = async () => {
     try {
@@ -301,10 +303,21 @@ export default function FeedScreen() {
       try {
         const saved = await storage.getItem<string[]>("vibepulse.viewed_stories", []);
         if (saved && Array.isArray(saved)) setViewedStoryUserIds(saved);
+
+        const lastSeenVer = await storage.getItem<string>("vibepulse.last_seen_version", "");
+        if (lastSeenVer !== CURRENT_APP_VERSION) {
+          setShowUpdateBanner(true);
+        }
       } catch {}
     }
     loadSavedViewedStories();
   }, []);
+
+  const handleDismissUpdateBanner = async () => {
+    setShowUpdateBanner(false);
+    await storage.setItem("vibepulse.last_seen_version", CURRENT_APP_VERSION);
+    setChangelogOpen(true);
+  };
 
   const openStoryViewer = (group: any) => {
     if (group.user?.user_id) {
@@ -534,6 +547,18 @@ export default function FeedScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Live Version Update Notification Banner */}
+        {showUpdateBanner ? (
+          <TouchableOpacity onPress={handleDismissUpdateBanner} style={styles.updateBanner}>
+            <Ionicons name="sparkles" size={18} color="#10B981" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.updateBannerTitle}>✨ VibePulse {CURRENT_APP_VERSION} Güncellendi!</Text>
+              <Text style={styles.updateBannerSub}>Tüm yeni özellikleri ve düzeltmeleri görmek için dokunun 📖</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#10B981" />
+          </TouchableOpacity>
+        ) : null}
 
         {/* 24h Vibe Stories Circles Bar */}
         <ScrollView
@@ -1172,6 +1197,20 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(10,10,11,0.9)",
   },
   brandRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  updateBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(16, 185, 129, 0.15)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "rgba(16, 185, 129, 0.4)",
+  },
+  updateBannerTitle: { color: "#10B981", fontWeight: "800", fontSize: 12 },
+  updateBannerSub: { color: theme.textDim, fontSize: 11, marginTop: 1 },
   logo: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   brand: { color: theme.text, fontWeight: "800", fontSize: 18, letterSpacing: -0.3, flex: 1 },
   bellBtn: { position: "relative", padding: 6 },
