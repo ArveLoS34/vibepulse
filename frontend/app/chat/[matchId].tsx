@@ -102,6 +102,19 @@ export default function ChatScreen() {
     } catch {}
   };
 
+  const handleSuggestVenue = async (venue: any) => {
+    try {
+      await api(`/matches/${matchId}/suggest-venue`, {
+        method: "POST",
+        body: JSON.stringify({ venue_name: venue.name, address: venue.address }),
+      });
+      setVenueModalOpen(false);
+      load();
+    } catch (e: any) {
+      alert(e?.message || "Buluşma önerisi gönderilemedi");
+    }
+  };
+
   const sendVirtualHomeResult = async () => {
     const score = Math.floor(Math.random() * 8) + 92; // 92-99% compatibility score
     const resultText = `🏡 Sanal Ev Kurma Simülasyonu Sonucu (%${score} Birlikte Yaşam Uyumu! ✨)\n\n• Ev Dekorasyonu: ${selectedHomeStyle}\n• Bütçe Planı: ${selectedBudget}\n• Ev Kuralı: ${selectedRule}\n\nHarika bir yaşam alanı kurduk! Senin düşüncelerin neler? 😊`;
