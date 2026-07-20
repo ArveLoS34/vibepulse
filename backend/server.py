@@ -1544,6 +1544,15 @@ async def list_signals(current=Depends(get_current_user)):
     return {"signals": signals}
 
 
+@api.get("/messages/unread-count")
+async def get_unread_messages_count(current=Depends(get_current_user)):
+    unread_count = await db.messages.count_documents({
+        "to_user_id": current["user_id"],
+        "read": False
+    })
+    return {"unread_count": unread_count}
+
+
 @api.get("/matches/{match_id}/messages")
 async def list_messages(match_id: str, current=Depends(get_current_user), after: Optional[str] = None):
     await _match_or_404(match_id, current["user_id"])
