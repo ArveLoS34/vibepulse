@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -307,6 +308,34 @@ export default function ChatScreen() {
     }
   };
 
+  const takeCameraImage = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) return alert("Kamera izni gerekli");
+    const res = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      quality: 0.7,
+      base64: true,
+    });
+
+    if (!res.canceled && res.assets[0]) {
+      const a = res.assets[0];
+      const base64 = a.base64 ? `data:image/jpeg;base64,${a.base64}` : a.uri;
+      setSelectedImage(base64);
+    }
+  };
+
+  const handlePickMediaOptions = () => {
+    Alert.alert(
+      "Fotoğraf Ekle",
+      "Fotoğrafı nasıl eklemek istersiniz?",
+      [
+        { text: "📷 Kamera İle Çek", onPress: takeCameraImage },
+        { text: "🖼️ Galeriden Seç", onPress: pickImage },
+        { text: "İptal", style: "cancel" },
+      ]
+    );
+  };
+
   const send = async () => {
     const body = text.trim();
     if ((!body && !selectedImage && !voiceUri) || sending) return;
@@ -511,7 +540,7 @@ export default function ChatScreen() {
         )}
 
         <View style={styles.inputBar}>
-          <TouchableOpacity onPress={pickImage} style={styles.mediaBtn} testID="chat-pick-image">
+          <TouchableOpacity onPress={handlePickMediaOptions} style={styles.mediaBtn} testID="chat-pick-image">
             <Ionicons name="camera-outline" size={20} color={theme.rose} />
           </TouchableOpacity>
 

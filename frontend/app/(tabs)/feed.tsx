@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Image, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Image, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -119,6 +119,34 @@ export default function FeedScreen() {
       const mime = res.assets[0].mimeType || "image/jpeg";
       setStoryMedia(`data:${mime};base64,${res.assets[0].base64}`);
     }
+  };
+
+  const takeStoryMediaCamera = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) return alert("Kamera izni gerekli");
+
+    const res = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      quality: 0.5,
+      base64: true,
+    });
+
+    if (!res.canceled && res.assets[0]?.base64) {
+      const mime = res.assets[0].mimeType || "image/jpeg";
+      setStoryMedia(`data:${mime};base64,${res.assets[0].base64}`);
+    }
+  };
+
+  const handlePickStoryMediaOptions = () => {
+    Alert.alert(
+      "Hikaye İçin Medya Ekle",
+      "Fotoğraf veya videoyu nasıl eklemek istersiniz?",
+      [
+        { text: "📷 Kamera İle Çek", onPress: takeStoryMediaCamera },
+        { text: "🖼️ Galeriden Seç", onPress: pickStoryMedia },
+        { text: "İptal", style: "cancel" },
+      ]
+    );
   };
 
   const load = useCallback(async () => {
@@ -853,9 +881,9 @@ export default function FeedScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity onPress={pickStoryMedia} style={styles.mediaSelectBtn}>
+              <TouchableOpacity onPress={handlePickStoryMediaOptions} style={styles.mediaSelectBtn}>
                 <Ionicons name="camera-outline" size={32} color={theme.rose} />
-                <Text style={styles.mediaSelectText}>📷 Fotoğraf veya Video Ekle</Text>
+                <Text style={styles.mediaSelectText}>📷 Fotoğraf veya Video Ekle (Kamera / Galeri)</Text>
               </TouchableOpacity>
             )}
 
