@@ -8,6 +8,7 @@ import * as ImagePicker from "expo-image-picker";
 import { PostCard, Post } from "@/src/components/PostCard";
 import { ComposeModal } from "@/src/components/ComposeModal";
 import { ChangelogModal } from "@/src/components/ChangelogModal";
+import { DailyWheelModal } from "@/src/components/DailyWheelModal";
 import { Avatar } from "@/src/components/Avatar";
 import { api } from "@/src/lib/api";
 import { storage } from "@/src/utils/storage";
@@ -15,7 +16,7 @@ import { useAuth } from "@/src/context/AuthContext";
 import { theme, radius, spacing } from "@/src/lib/theme";
 
 const HASHTAGS = ["Tüm", "Yazılım", "Müzik", "Kahve", "Gece", "Sanat", "Eğlence"];
-const CURRENT_APP_VERSION = "v2.7.0";
+const CURRENT_APP_VERSION = "v2.8.0";
 
 export default function FeedScreen() {
   const router = useRouter();
@@ -82,6 +83,7 @@ export default function FeedScreen() {
   const [unreadNotifsCount, setUnreadNotifsCount] = useState(0);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [showUpdateBanner, setShowUpdateBanner] = useState(false);
+  const [wheelModalOpen, setWheelModalOpen] = useState(false);
 
   const loadNotifications = async () => {
     try {
@@ -661,6 +663,27 @@ export default function FeedScreen() {
           </ScrollView>
         </View>
 
+        {/* Daily Fortune Wheel Banner (v2.8.0) */}
+        <TouchableOpacity
+          onPress={() => setWheelModalOpen(true)}
+          style={styles.wheelBanner}
+          testID="vibe-wheel-banner"
+        >
+          <LinearGradient
+            colors={["rgba(245,158,11,0.25)", "rgba(244,63,94,0.25)"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.wheelBannerInner}
+          >
+            <Text style={{ fontSize: 22 }}>🎡</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.wheelBannerTitle}>Günlük Vibe Çarkı & Aşk Kehaneti</Text>
+              <Text style={styles.wheelBannerSub}>Çarkı çevir, kehanetini keşfet ve akışta paylaş!</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#F59E0B" />
+          </LinearGradient>
+        </TouchableOpacity>
+
         {/* v2 Feature 1: Blind Speed Dating Event Banner */}
         <TouchableOpacity
           onPress={joinSpeedDating}
@@ -742,6 +765,7 @@ export default function FeedScreen() {
 
       <ComposeModal visible={composeOpen} onClose={() => setComposeOpen(false)} onPosted={load} />
       <ChangelogModal visible={changelogOpen} onClose={() => setChangelogOpen(false)} />
+      <DailyWheelModal visible={wheelModalOpen} onClose={() => setWheelModalOpen(false)} onPostFortune={load} />
 
       {/* Create VIP Live Audio Room Modal */}
       <Modal visible={createRoomOpen} animationType="slide" onRequestClose={() => setCreateRoomOpen(false)}>
@@ -1279,6 +1303,19 @@ const styles = StyleSheet.create({
   },
   chipText: { color: theme.textDim, fontSize: 13, fontWeight: "600" },
   chipTextActive: { color: "#fff", fontWeight: "700" },
+  wheelBanner: { marginTop: spacing.sm, borderRadius: radius.md, overflow: "hidden" },
+  wheelBannerInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.4)",
+    borderRadius: radius.md,
+  },
+  wheelBannerTitle: { color: "#F59E0B", fontSize: 13, fontWeight: "800" },
+  wheelBannerSub: { color: theme.textDim, fontSize: 11, marginTop: 1 },
   speedDatingBanner: { marginTop: spacing.sm, borderRadius: radius.md, overflow: "hidden" },
   speedDatingInner: {
     flexDirection: "row",

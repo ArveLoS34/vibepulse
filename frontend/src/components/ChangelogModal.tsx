@@ -20,6 +20,18 @@ type ReleaseNote = {
 
 const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "v2.8.0",
+    date: "21 Temmuz 2026",
+    title: "🎡 Günlük Vibe Çarkı & Aşk Kehaneti, Hak Yenilenme Geri Sayımı",
+    badgeColor: "#F59E0B",
+    items: [
+      { icon: "aperture", text: "Günlük Vibe Çarkı & Aşk Kehaneti (🎡)", sub: "Ana sayfada günlük şans ve kehanet çarkı. Çıkan sonucu tek tıkla Vibe akışında paylaşma." },
+      { icon: "star", text: "VIP Üye Çevirme Ayrıcalığı", sub: "Ücretsiz üyelere günde 1 çevirme, VibePulse Premium (VIP) üyelere günde 2 çevirme hakkı." },
+      { icon: "timer", text: "Canlı Sayaç & Yenilenme Zamanı", sub: "Hakkı biten kullanıcılar için gece 00:00 sıfırlanmasına kadar canlı geri sayım sayacı." },
+      { icon: "sparkles", text: "Canlı Güncelleme Banner'ı", sub: "Uygulamayı açar açmaz yeni sürümü haber veren yeşil güncelleme duyuru paneli." },
+    ],
+  },
+  {
     version: "v2.7.0",
     date: "20 Temmuz 2026",
     title: "Sihirli Değnek Asistanı, Sahne Konuşmacı Onayı & Instagram Yönlendirme",

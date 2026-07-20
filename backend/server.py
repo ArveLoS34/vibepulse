@@ -2880,6 +2880,91 @@ async def list_squads(current=Depends(get_current_user)):
     return {"squads": squads}
 
 
+# --- Vibe Wheel & Fortune Endpoints (v2.8.0) ---
+WHEEL_OUTCOMES = [
+    "🔮 Müzik Zevkin Bugün Tam Bir Magnet! Biri Seni Keşfetmek Üzere ✨",
+    "💖 Sana Yakın Bir Vibe Var: Bugün Mesaj Atan Şanslı Kişi Olabilirsin!",
+    "☕ Bugün Kahve Buluşması İçin Mükemmel Bir Gün!",
+    "🌟 Günün Vibe Yıldızı Sensin! Profilin Öne Çıktı.",
+    "🎧 Favori Parçanı Profiline Ekle, Bugün Uyum Skoru %95 Üzeri Biriyle Karşılaşacaksın!",
+    "💬 Anonim Soru Kutuna Bak, Gizli Bir Hayranın Olabilir! 🙈",
+]
+
+def _seconds_until_midnight() -> int:
+    now = datetime.now(timezone.utc)
+    tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return int((tomorrow - now).total_seconds())
+
+@api.get("/vibe-wheel/status")
+async def vibe_wheel_status(current=Depends(get_current_user)):
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    is_prem = bool(current.get("is_premium") or current.get("is_admin"))
+    max_spins = 2 if is_prem else 1
+
+    spin_record = await db.wheel_spins.find_one({"user_id": current["user_id"], "date": today_str})
+    used_spins = spin_record.get("count", 0) if spin_record else 0
+    remaining = max(0, max_spins - used_spins)
+
+    return {
+        "today": today_str,
+        "is_premium": is_prem,
+        "max_spins": max_spins,
+        "used_spins": used_spins,
+        "remaining_spins": remaining,
+        "seconds_until_reset": _seconds_until_midnight(),
+        "last_outcome": spin_record.get("last_outcome") if spin_record else None
+    }
+
+
+@api.post("/vibe-wheel/spin")
+async def vibe_wheel_spin(current=Depends(get_current_user)):
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    is_prem = bool(current.get("is_premium") or current.get("is_admin"))
+    max_spins = 2 if is_prem else 1
+
+    spin_record = await db.wheel_spins.find_one({"user_id": current["user_id"], "date": today_str})
+    used_spins = spin_record.get("count", 0) if spin_record else 0
+
+    if used_spins >= max_spins:
+        sec_left = _seconds_until_midnight()
+        hours = sec_left // 3600
+        mins = (sec_left % 3600) // 60
+        secs = sec_left % 60
+        timer_str = f"{hours:02d}:{mins:02d}:{secs:02d}"
+        
+        err_msg = f"Bugünkü çevirme hakkınız doldu! (Kalan: 0/{max_spins})\nYenilenme Süresi: {timer_str}"
+        if not is_prem:
+            err_msg += "\n\n⭐ VibePulse Premium'a yükselterek günde 2 çevirme hakkı elde edebilirsiniz!"
+
+        raise HTTPException(
+            status_code=400,
+            detail=err_msg
+        )
+
+    outcome = random.choice(WHEEL_OUTCOMES)
+    new_count = used_spins + 1
+
+    await db.wheel_spins.update_one(
+        {"user_id": current["user_id"], "date": today_str},
+        {"$set": {
+            "user_id": current["user_id"],
+            "date": today_str,
+            "count": new_count,
+            "last_outcome": outcome,
+            "updated_at": now_utc().isoformat()
+        }},
+        upsert=True
+    )
+
+    return {
+        "outcome": outcome,
+        "used_spins": new_count,
+        "max_spins": max_spins,
+        "remaining_spins": max_spins - new_count,
+        "seconds_until_reset": _seconds_until_midnight()
+    }
+
+
 # ------------------------- boot -------------------------
 app.include_router(api)
 
