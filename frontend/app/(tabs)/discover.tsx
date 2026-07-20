@@ -79,7 +79,7 @@ export default function DiscoverScreen() {
       Animated.timing(pan, {
         toValue: { x: targetX, y: 0 },
         duration: 220,
-        useNativeDriver: !isWeb,
+        useNativeDriver: false,
       }).start(async () => {
         const targetId = top.user_id;
         setLastSwipedCard(top);
