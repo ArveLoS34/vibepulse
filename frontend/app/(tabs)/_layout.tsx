@@ -1,10 +1,3 @@
-import React from "react";
-import { Tabs } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { View } from "react-native";
-import { theme } from "@/src/lib/theme";
-
 import React, { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
