@@ -86,11 +86,26 @@ export default function PostDetail() {
             }
             renderItem={({ item }) => (
               <View style={styles.commentRow}>
-                <Avatar uri={item.author.avatar} name={item.author.name} size={36} />
+                <TouchableOpacity
+                  onPress={() =>
+                    item.author?.user_id &&
+                    router.push({ pathname: "/profile/[id]", params: { id: item.author.user_id } })
+                  }
+                >
+                  <Avatar uri={item.author.avatar} name={item.author.name} size={36} />
+                </TouchableOpacity>
+
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.commentName}>
-                    {item.author.name} <Text style={styles.commentHandle}>@{item.author.handle}</Text>
-                  </Text>
+                  <TouchableOpacity
+                    onPress={() =>
+                      item.author?.user_id &&
+                      router.push({ pathname: "/profile/[id]", params: { id: item.author.user_id } })
+                    }
+                  >
+                    <Text style={styles.commentName}>
+                      {item.author.name} <Text style={styles.commentHandle}>@{item.author.handle}</Text>
+                    </Text>
+                  </TouchableOpacity>
                   <Text style={styles.commentText}>{item.text}</Text>
                 </View>
               </View>

@@ -26,7 +26,7 @@ const RELEASE_NOTES: ReleaseNote[] = [
     badgeColor: "#10B981",
     items: [
       { icon: "color-wand", text: "Sihirli Değnek (🪄) Sohbet Menüsü", sub: "Sohbetteki Buluş, Ev Kur ve AI Wingman butonları tek sihirli menü altında toplandı." },
-      { icon: "person", text: "Hikaye Profil Yönlendirmesi", sub: "Story izleme ekranında profil resmine tıklayınca doğrudan kişinin profiline gitme." },
+      { icon: "person", text: "Hikaye & Yorum Profil Yönlendirmesi", sub: "Story izleme ekranında ve Vibe yorumlarında profil resmine tıklayınca doğrudan kişinin profiline gitme." },
       { icon: "mic", text: "Live Oda Sahne Konuşma İzni", sub: "Ses odasında el kaldıran dinleyici için yayıncıya onay/reddet bildirimi paneli." },
       { icon: "logo-instagram", text: "Instagram Profil Butonu", sub: "Biyografi altındaki Instagram butonuna basınca uygulamayı/profili anında açma." },
       { icon: "camera", text: "Kamera İle Fotoğraf Çekme", sub: "Vibe gönderisi paylaşırken galeriye ek olarak doğrudan kamera ile çekme seçeneği." },
