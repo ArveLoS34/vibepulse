@@ -26,7 +26,7 @@ export function useLocation() {
         if (!user.location || Math.abs(user.location.lat - newLoc.lat) > 0.01) {
           await updateProfile({ location: newLoc });
         }
-      } catch (err) {
+      } catch {
         // Location permission or service disabled
       }
     }

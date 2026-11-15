@@ -54,7 +54,7 @@ export default function MatchesScreen() {
         <View style={styles.empty} testID="matches-empty">
           <Ionicons name="chatbubbles-outline" size={48} color={theme.textMuted} />
           <Text style={styles.emptyTitle}>Henüz eşleşme yok</Text>
-          <Text style={styles.emptyText}>Keşfet sekmesinde vibe'ları oku ve kaydır.</Text>
+          <Text style={styles.emptyText}>Keşfet sekmesinde vibe&apos;ları oku ve kaydır.</Text>
         </View>
       ) : (
         <FlatList

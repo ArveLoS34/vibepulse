@@ -41,7 +41,7 @@ export default function PublicProfile() {
   // Active Story state for this profile
   const [userStoryGroup, setUserStoryGroup] = useState<any | null>(null);
   const [storyModalOpen, setStoryModalOpen] = useState(false);
-  const [activeStoryIdx, setActiveStoryIdx] = useState(0);
+  const [activeStoryIdx] = useState(0);
   const [replyText, setReplyText] = useState("");
   const [replyBusy, setReplyBusy] = useState(false);
 
@@ -262,8 +262,8 @@ export default function PublicProfile() {
             {user.instagram_handle ? (
               <TouchableOpacity
                 onPress={() => {
-                  const clean = user.instagram_handle.replace(/^@+/, "");
-                  Linking.openURL(`https://instagram.com/${clean}`);
+                  const clean = (user.instagram_handle ?? "").replace(/^@+/, "");
+                  Linking.openURL(`https://instagram.com/${encodeURIComponent(clean)}`);
                 }}
                 style={styles.instaWidget}
               >
@@ -389,7 +389,7 @@ export default function PublicProfile() {
           ) : null}
 
           <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.md }}>
-            <Text style={styles.section}>Vibe'ları</Text>
+            <Text style={styles.section}>Vibe&apos;ları</Text>
           </View>
           {posts.map((p) => <PostCard key={p.post_id} post={p} />)}
         </ScrollView>
@@ -436,7 +436,7 @@ export default function PublicProfile() {
                     style={styles.storyCard}
                   >
                     <Text style={styles.storyCardText}>
-                      "{userStoryGroup.stories[activeStoryIdx].text}"
+                      &quot;{userStoryGroup.stories[activeStoryIdx].text}&quot;
                     </Text>
                   </LinearGradient>
                 ) : null}

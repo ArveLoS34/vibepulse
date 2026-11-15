@@ -27,7 +27,8 @@ export function useNotifications() {
         if (typeof Notifications.setNotificationHandler === "function") {
           Notifications.setNotificationHandler({
             handleNotification: async () => ({
-              shouldShowAlert: true,
+              shouldShowBanner: true,
+              shouldShowList: true,
               shouldPlaySound: true,
               shouldSetBadge: true,
             }),
@@ -65,7 +66,7 @@ export function useNotifications() {
             });
           }
         }
-      } catch (err) {
+      } catch {
         // Log push error silently if device lacks Play Services
       }
     }

@@ -2,7 +2,15 @@
 // Concrete implementations live in index.ts (native) and index.web.ts (web).
 
 export type StorageItemKey = string;
-export type StorageItemValue = string | number | boolean | null;
+// Any JSON-serializable value (values are JSON.stringify'd / JSON.parse'd by the
+// concrete implementations, so arrays and plain objects round-trip safely).
+export type StorageItemValue =
+  | string
+  | number
+  | boolean
+  | null
+  | StorageItemValue[]
+  | { [key: string]: StorageItemValue };
 
 // Helper for subclasses to enforce that they don't declare methods beyond
 // StorageBase. Use as: type _ = AssertNoExtras<Exclude<keyof Storage, keyof StorageBase>>;

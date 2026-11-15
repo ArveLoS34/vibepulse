@@ -25,6 +25,7 @@ export type VibeUser = {
   distance_km?: number;
   is_premium?: boolean;
   is_admin?: boolean;
+  is_founder?: boolean;
   is_email_verified?: boolean;
   is_verified?: boolean;
   handle_changes_left?: number;

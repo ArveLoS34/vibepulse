@@ -741,7 +741,7 @@ export default function FeedScreen() {
             <View style={styles.empty} testID="feed-empty">
               <Ionicons name="planet-outline" size={48} color={theme.textMuted} />
               <Text style={styles.emptyTitle}>Feed sessiz</Text>
-              <Text style={styles.emptyText}>İlk vibe'ı sen paylaş.</Text>
+              <Text style={styles.emptyText}>İlk vibe&apos;ı sen paylaş.</Text>
               {err ? <Text style={styles.err}>{err}</Text> : null}
             </View>
           }
@@ -1054,7 +1054,7 @@ export default function FeedScreen() {
                     style={styles.storyCard}
                   >
                     <Text style={styles.storyCardText}>
-                      "{activeStoryGroup.stories[activeStoryIdx].text}"
+                      &quot;{activeStoryGroup.stories[activeStoryIdx].text}&quot;
                     </Text>
                   </LinearGradient>
                 ) : null}

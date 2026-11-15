@@ -17,7 +17,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useAuth } from "@/src/context/AuthContext";
-import { useTranslation } from "@/src/i18n/LanguageContext";
 import { LanguageSelectorModal } from "@/src/components/LanguageSelectorModal";
 import { ChangelogModal } from "@/src/components/ChangelogModal";
 import { api } from "@/src/lib/api";
@@ -29,7 +28,6 @@ import { Avatar } from "@/src/components/Avatar";
 export default function MeScreen() {
   const router = useRouter();
   const { user, refresh, logout, deleteAccount, sendVerificationCode, verifyEmailCode } = useAuth();
-  const { t } = useTranslation();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [questionsModalOpen, setQuestionsModalOpen] = useState(false);
@@ -305,8 +303,8 @@ export default function MeScreen() {
           {user.instagram_handle ? (
             <TouchableOpacity
               onPress={() => {
-                const clean = user.instagram_handle.replace(/^@+/, "");
-                Linking.openURL(`https://instagram.com/${clean}`);
+                const clean = (user.instagram_handle ?? "").replace(/^@+/, "");
+                Linking.openURL(`https://instagram.com/${encodeURIComponent(clean)}`);
               }}
               style={styles.instaBtn}
             >
@@ -363,13 +361,13 @@ export default function MeScreen() {
         ) : null}
 
         <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 4 }}>
-          <Text style={styles.sectionTitle}>Vibe'larım</Text>
+          <Text style={styles.sectionTitle}>Vibe&apos;larım</Text>
         </View>
         {loading ? (
           <ActivityIndicator color={theme.rose} style={{ marginTop: 20 }} />
         ) : posts.length === 0 ? (
           <View style={{ padding: spacing.xxl, alignItems: "center" }}>
-            <Text style={styles.emptyText}>Henüz paylaşım yok. Feed'e git ve ilk vibe'ını at.</Text>
+            <Text style={styles.emptyText}>Henüz paylaşım yok. Feed&apos;e git ve ilk vibe&apos;ını at.</Text>
           </View>
         ) : (
           posts.map((p) => <PostCard key={p.post_id} post={p} />)
@@ -468,7 +466,7 @@ export default function MeScreen() {
             }
             renderItem={({ item }) => (
               <View style={styles.qCard}>
-                <Text style={styles.qText}>❓ "{item.question_text}"</Text>
+                <Text style={styles.qText}>❓ &quot;{item.question_text}&quot;</Text>
                 {item.answer_text ? (
                   <View style={styles.aBox}>
                     <Text style={styles.aText}>💬 Cevabın: {item.answer_text}</Text>

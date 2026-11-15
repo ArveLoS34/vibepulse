@@ -140,7 +140,7 @@ class SmartCursor:
         if self._cursor is not None:
             try:
                 return await self._cursor.to_list(length)
-            except Exception as e:
+            except Exception:
                 pass
         return self._mem[:length]
 
@@ -734,12 +734,6 @@ class SpotifyStatusIn(BaseModel):
 
 class VerifyEmailIn(BaseModel):
     code: str
-
-
-class SubmitBankReceiptIn(BaseModel):
-    sender_name: str
-    amount_try: str = "299"
-    reference_note: Optional[str] = None
 
 
 class SubmitBankReceiptIn(BaseModel):
@@ -1667,7 +1661,7 @@ async def send_message(match_id: str, payload: MessageCreate, current=Depends(ge
 
     preview = "Sana bir fotoğraf gönderdi 📷" if (payload.image and not payload.text) else payload.text
     asyncio.create_task(create_in_app_notification(
-        other, "message", "Yeni Mesaj 💬", f"{current.get(name, Biri)}: {preview}",
+        other, "message", "Yeni Mesaj 💬", f"{current.get('name', 'Biri')}: {preview}",
         {"user_id": current["user_id"], "name": current.get("name"), "avatar": (current.get("photos") or [""])[0]}
     ))
 

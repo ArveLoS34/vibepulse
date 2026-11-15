@@ -51,7 +51,7 @@ export default function Login() {
             <Ionicons name="chevron-back" size={24} color={theme.text} />
           </Pressable>
           <Text style={styles.h1}>Tekrar hoşgeldin</Text>
-          <Text style={styles.sub}>Vibe'ına devam et.</Text>
+          <Text style={styles.sub}>Vibe&apos;ına devam et.</Text>
 
           <View style={styles.field}>
             <Text style={styles.label}>Email</Text>
