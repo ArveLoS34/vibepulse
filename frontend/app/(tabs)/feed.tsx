@@ -441,7 +441,7 @@ export default function FeedScreen() {
       clearInterval(speedPollRef.current);
       clearInterval(speedTimerRef.current);
     };
-  }, [speedModalOpen, speedStatus]);
+  }, [speedModalOpen, speedStatus, router]);
 
   const postStory = async () => {
     if (!storyText.trim() && !storyMedia) return alert("Lütfen yazı veya bir fotoğraf/video seçin.");

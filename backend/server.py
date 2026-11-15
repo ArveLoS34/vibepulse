@@ -17,6 +17,7 @@ import math
 import os
 import random
 import re
+import secrets
 import time
 import uuid
 from collections import defaultdict, deque
@@ -38,7 +39,30 @@ load_dotenv(ROOT_DIR / ".env")
 
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
 DB_NAME = os.environ.get("DB_NAME", "vibepulse")
-JWT_SECRET = os.environ.get("JWT_SECRET", "vibepulse-secret-key-12345")
+# Secrets that were previously committed to this (public) repository. They are
+# compromised and must never be used, even if an old deployment still sets them.
+_COMPROMISED_SECRETS = {
+    "vibepulse-secret-key-12345",
+    "vibepulse-production-secret-9988",
+    "VibePulse2026AdminKey",
+}
+
+
+def _load_jwt_secret() -> str:
+    secret = os.environ.get("JWT_SECRET", "").strip()
+    if not secret or secret in _COMPROMISED_SECRETS or len(secret) < 32:
+        # Safe fallback: a random per-process secret. Tokens become invalid on
+        # restart (users must log in again) — set a strong JWT_SECRET in the env.
+        logging.getLogger("vibepulse").warning(
+            "JWT_SECRET is missing, too short (<32 chars) or a known-leaked value. "
+            "Using a random temporary secret; sessions will reset on restart. "
+            "Set a strong JWT_SECRET environment variable."
+        )
+        return secrets.token_urlsafe(64)
+    return secret
+
+
+JWT_SECRET = _load_jwt_secret()
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 REDIS_URL = os.environ.get("REDIS_URL", "")
 
@@ -54,9 +78,11 @@ SMTP_USER = os.environ.get("SMTP_USER", "")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
 SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER or "noreply@vibepulse.app")
 
-OFFICIAL_IBAN = os.environ.get("OFFICIAL_IBAN", "TR88 0006 7010 0000 0076 1583 55")
-OFFICIAL_BANK_NAME = os.environ.get("OFFICIAL_BANK_NAME", "Yapı Kredi Bankası (YAPIKREDİ)")
-OFFICIAL_ACCOUNT_HOLDER = os.environ.get("OFFICIAL_ACCOUNT_HOLDER", "RECEP ALİ KESER")
+# Bank transfer details are configured via environment variables only
+# (OFFICIAL_IBAN, OFFICIAL_BANK_NAME, OFFICIAL_ACCOUNT_HOLDER) — never hardcode them.
+OFFICIAL_IBAN = os.environ.get("OFFICIAL_IBAN", "").strip()
+OFFICIAL_BANK_NAME = os.environ.get("OFFICIAL_BANK_NAME", "").strip()
+OFFICIAL_ACCOUNT_HOLDER = os.environ.get("OFFICIAL_ACCOUNT_HOLDER", "").strip()
 
 
 async def send_email_async(to_email: str, subject: str, html_content: str) -> bool:
@@ -1725,6 +1751,8 @@ async def activate_boost(current=Depends(get_current_user)):
 
 @api.get("/subscription/iban-info")
 async def get_iban_info():
+    if not (OFFICIAL_IBAN and OFFICIAL_ACCOUNT_HOLDER):
+        raise HTTPException(status_code=503, detail="Havale / EFT bilgileri şu anda kullanılamıyor.")
     return {
         "iban": OFFICIAL_IBAN,
         "bank": OFFICIAL_BANK_NAME,
@@ -2304,9 +2332,17 @@ async def resolve_admin_report(report_id: str, payload: AdminResolveReportIn, cu
 
 @api.post("/admin/promote-user")
 async def promote_user(payload: PromoteUserIn, current=Depends(get_current_user)):
-    expected_key = os.environ.get("ADMIN_SECRET_KEY", "VibePulse2026AdminKey")
+    # No default key: if ADMIN_SECRET_KEY is unset (or is a known-leaked value) the
+    # secret-key path is disabled and only existing admins can promote users.
+    expected_key = os.environ.get("ADMIN_SECRET_KEY", "").strip()
+    key_valid = (
+        bool(expected_key)
+        and expected_key not in _COMPROMISED_SECRETS
+        and bool(payload.secret_key)
+        and secrets.compare_digest(payload.secret_key.encode(), expected_key.encode())
+    )
 
-    is_authorized = current.get("is_admin") or (payload.secret_key and payload.secret_key == expected_key)
+    is_authorized = bool(current.get("is_admin")) or key_valid
     if not is_authorized:
         raise HTTPException(status_code=403, detail="Bu işlemi yapmaya yetkiniz bulunmamaktadır.")
 

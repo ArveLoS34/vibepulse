@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import { api, clearToken, saveToken } from "@/src/lib/api";
 
@@ -184,24 +184,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const value = useMemo<Ctx>(
-    () => ({
-      loading,
-      user,
-      refresh,
-      loginPassword,
-      register,
-      loginGoogle,
-      updateProfile,
-      sendVerificationCode,
-      verifyEmailCode,
-      verifySelfie,
-      verifyPayment,
-      logout,
-      deleteAccount,
-    }),
-    [loading, user, refresh]
-  );
+  const value: Ctx = {
+    loading,
+    user,
+    refresh,
+    loginPassword,
+    register,
+    loginGoogle,
+    updateProfile,
+    sendVerificationCode,
+    verifyEmailCode,
+    verifySelfie,
+    verifyPayment,
+    logout,
+    deleteAccount,
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

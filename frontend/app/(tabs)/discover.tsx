@@ -26,20 +26,12 @@ type Card = VibeUser & { top_post?: { post_id: string; text: string; image?: str
 const { width: W } = Dimensions.get("window");
 const SWIPE_THRESHOLD = W * 0.28;
 
-const DISTANCES = [
-  { label: "Tüm Mesafeler", value: null },
-  { label: "10 km", value: 10 },
-  { label: "25 km", value: 25 },
-  { label: "50 km", value: 50 },
-  { label: "100 km", value: 100 },
-];
-
 export default function DiscoverScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDistance, setSelectedDistance] = useState<number | null>(null);
+  const [selectedDistance] = useState<number | null>(null);
   const [squadsActive, setSquadsActive] = useState(false);
   const [matchInfo, setMatchInfo] = useState<{ matchId: string; user: Card } | null>(null);
   const [lastSwipedCard, setLastSwipedCard] = useState<Card | null>(null);
