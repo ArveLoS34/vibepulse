@@ -137,7 +137,17 @@ MODERATION_WINDOW_SEC = 60
 MODERATION_MAX_PER_WINDOW = 20  # per user per minute
 _mod_calls: dict[str, deque] = defaultdict(deque)
 
-raw_client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=1500)
+try:
+    raw_client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=1500)
+except Exception as _mongo_err:
+    # An unresolvable / invalid MONGO_URL (e.g. a deleted Atlas cluster) used to crash the
+    # whole app at import time. Fall back to a lazy local client instead: SmartDB then serves
+    # from its in-memory store. DATA IS NOT PERSISTED in this mode - fix MONGO_URL.
+    logging.getLogger("vibepulse").error(
+        "MONGO_URL could not be used (%s). Running WITHOUT a persistent database; "
+        "data will be lost on restart. Set a valid MONGO_URL.", _mongo_err
+    )
+    raw_client = AsyncIOMotorClient("mongodb://localhost:27017", serverSelectionTimeoutMS=1500)
 raw_db = raw_client[DB_NAME]
 
 
