@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -184,7 +185,7 @@ export default function Onboarding() {
 
           {step === 2 && (
             <View>
-              <Text style={styles.h1}>Vibe'ını anlat.</Text>
+              <Text style={styles.h1}>Vibe&apos;ını anlat.</Text>
               <Text style={styles.sub}>Kısa ve öz. Kişiliğini yansıt.</Text>
 
               <Text style={styles.label}>Anlık Mood (1 kelime/emoji)</Text>
@@ -241,7 +242,7 @@ export default function Onboarding() {
           {step === 4 && (
             <View>
               <Text style={styles.h1}>Fotoğraflar</Text>
-              <Text style={styles.sub}>1-6 fotoğraf yükle. En iyi vibe'ını göster.</Text>
+              <Text style={styles.sub}>1-6 fotoğraf yükle. En iyi vibe&apos;ını göster.</Text>
 
               <View style={styles.photoGrid}>
                 {[0, 1, 2, 3, 4, 5].map((i) => {
@@ -303,7 +304,6 @@ export default function Onboarding() {
 }
 
 function ImagePreview({ uri }: { uri: string }) {
-  const { Image } = require("react-native");
   return <Image source={{ uri }} style={{ width: "100%", height: "100%", borderRadius: radius.md }} />;
 }
 

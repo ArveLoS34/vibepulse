@@ -26,11 +26,14 @@ export function useLocation() {
         if (!user.location || Math.abs(user.location.lat - newLoc.lat) > 0.01) {
           await updateProfile({ location: newLoc });
         }
-      } catch (err) {
+      } catch {
         // Location permission or service disabled
       }
     }
 
     syncLocation();
+    // Intentionally keyed on the user id only: updateProfile() changes `user` and its own
+    // identity every render, so listing them would re-request location in a loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.user_id]);
 }

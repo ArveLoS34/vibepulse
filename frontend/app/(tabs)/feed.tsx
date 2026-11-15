@@ -441,7 +441,7 @@ export default function FeedScreen() {
       clearInterval(speedPollRef.current);
       clearInterval(speedTimerRef.current);
     };
-  }, [speedModalOpen, speedStatus]);
+  }, [speedModalOpen, speedStatus, router]);
 
   const postStory = async () => {
     if (!storyText.trim() && !storyMedia) return alert("Lütfen yazı veya bir fotoğraf/video seçin.");
@@ -741,7 +741,7 @@ export default function FeedScreen() {
             <View style={styles.empty} testID="feed-empty">
               <Ionicons name="planet-outline" size={48} color={theme.textMuted} />
               <Text style={styles.emptyTitle}>Feed sessiz</Text>
-              <Text style={styles.emptyText}>İlk vibe'ı sen paylaş.</Text>
+              <Text style={styles.emptyText}>İlk vibe&apos;ı sen paylaş.</Text>
               {err ? <Text style={styles.err}>{err}</Text> : null}
             </View>
           }
@@ -1054,7 +1054,7 @@ export default function FeedScreen() {
                     style={styles.storyCard}
                   >
                     <Text style={styles.storyCardText}>
-                      "{activeStoryGroup.stories[activeStoryIdx].text}"
+                      &quot;{activeStoryGroup.stories[activeStoryIdx].text}&quot;
                     </Text>
                   </LinearGradient>
                 ) : null}

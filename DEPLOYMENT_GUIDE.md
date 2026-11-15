@@ -26,8 +26,18 @@ Uygulamanızı kendi bilgisayarınızdan (localhost) tamamen bağımsız hale ge
 5. **Environment Variables** bölümüne şu değişkenleri ekleyin:
    * `MONGO_URL` = *(A şıkkında kopyaladığınız MongoDB Atlas adresi)*
    * `DB_NAME` = `vibepulse`
-   * `JWT_SECRET` = `vibepulse-production-secret-9988`
+   * `JWT_SECRET` = *(kendi ürettiğiniz uzun rastgele değer, en az 32 karakter; aşağıdaki komutla üretin. Bu değeri ASLA repoya yazmayın)*
+   * `ADMIN_SECRET_KEY` = *(isteğe bağlı: kendi ürettiğiniz farklı bir rastgele değer; tanımlamazsanız sadece mevcut adminler kullanıcı yükseltebilir)*
+   * `OFFICIAL_IBAN` = *(havale için gösterilecek IBAN)*
+   * `OFFICIAL_BANK_NAME` = *(banka adı)*
+   * `OFFICIAL_ACCOUNT_HOLDER` = *(hesap sahibi adı)*
    * `CORS_ORIGINS` = `*`
+
+   Güvenli bir değer üretmek için:
+   ```bash
+   python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+   ```
+   > Not: `OFFICIAL_*` değişkenleri tanımlı değilse uygulamadaki Havale/EFT ekranı bilgi göstermez.
 6. **Create Web Service** butonuna basın. Render size canlı bir URL verecektir:
    `https://vibepulse-api.onrender.com`
 

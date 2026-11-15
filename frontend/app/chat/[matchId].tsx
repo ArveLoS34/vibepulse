@@ -20,7 +20,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import Constants from "expo-constants";
 import { api, TOKEN_KEY } from "@/src/lib/api";
 import { storage } from "@/src/utils/storage";
 import { useAuth } from "@/src/context/AuthContext";
@@ -157,7 +156,7 @@ export default function ChatScreen() {
         };
 
         mediaRecorder.start();
-      } catch (err) {
+      } catch {
         setVoiceUri("data:audio/mp3;base64,mock_voice_note");
       }
     } else {
@@ -238,7 +237,7 @@ export default function ChatScreen() {
     try {
       const res = await api<{ suggestions: string[] }>(`/matches/${matchId}/wingman`, { method: "POST" });
       setWingmanSuggestions(res.suggestions || []);
-    } catch (e: any) {
+    } catch {
       setWingmanSuggestions(["Vibe'ındaki detay harika, hakkında ne düşünüyorsun? ✨"]);
     } finally {
       setWingmanBusy(false);
@@ -509,7 +508,7 @@ export default function ChatScreen() {
                 <Ionicons name="sparkles" size={32} color={theme.rose} />
                 <Text style={styles.emptyTitle}>İlk mesaj sende</Text>
                 <Text style={styles.emptyText}>
-                  Vibe'ında olan bir konu ile başla, klasik "selam"a hayır.
+                  Vibe&apos;ında olan bir konu ile başla, klasik &quot;selam&quot;a hayır.
                 </Text>
               </View>
             }

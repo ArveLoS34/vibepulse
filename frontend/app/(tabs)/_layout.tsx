@@ -10,10 +10,11 @@ import { useAuth } from "@/src/context/AuthContext";
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const userId = user?.user_id;
   const [unreadMsgCount, setUnreadMsgCount] = useState<number>(0);
 
   useEffect(() => {
-    if (!user) return;
+    if (!userId) return;
 
     const fetchUnreadMsgCount = async () => {
       try {
@@ -25,7 +26,7 @@ export default function TabsLayout() {
     fetchUnreadMsgCount();
     const interval = setInterval(fetchUnreadMsgCount, 4000);
     return () => clearInterval(interval);
-  }, [user?.user_id]);
+  }, [userId]);
 
   return (
     <Tabs

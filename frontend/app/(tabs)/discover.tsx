@@ -5,7 +5,6 @@ import {
   Dimensions,
   Image,
   PanResponder,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -27,20 +26,12 @@ type Card = VibeUser & { top_post?: { post_id: string; text: string; image?: str
 const { width: W } = Dimensions.get("window");
 const SWIPE_THRESHOLD = W * 0.28;
 
-const DISTANCES = [
-  { label: "Tüm Mesafeler", value: null },
-  { label: "10 km", value: 10 },
-  { label: "25 km", value: 25 },
-  { label: "50 km", value: 50 },
-  { label: "100 km", value: 100 },
-];
-
 export default function DiscoverScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [cards, setCards] = useState<Card[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDistance, setSelectedDistance] = useState<number | null>(null);
+  const [selectedDistance] = useState<number | null>(null);
   const [squadsActive, setSquadsActive] = useState(false);
   const [matchInfo, setMatchInfo] = useState<{ matchId: string; user: Card } | null>(null);
   const [lastSwipedCard, setLastSwipedCard] = useState<Card | null>(null);
@@ -74,7 +65,6 @@ export default function DiscoverScreen() {
         Haptics.selectionAsync();
       } catch {}
 
-      const isWeb = Platform.OS === "web";
 
       Animated.timing(pan, {
         toValue: { x: targetX, y: 0 },
@@ -147,7 +137,7 @@ export default function DiscoverScreen() {
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <View>
             <Text style={styles.title}>Keşfet</Text>
-            <Text style={styles.subtitle}>Vibe'ları oku · Ruh eşini seç</Text>
+            <Text style={styles.subtitle}>Vibe&apos;ları oku · Ruh eşini seç</Text>
           </View>
           <TouchableOpacity
             onPress={() => {
@@ -172,7 +162,7 @@ export default function DiscoverScreen() {
           <View style={styles.empty}>
             <Ionicons name="sparkles-outline" size={48} color={theme.textMuted} />
             <Text style={styles.emptyTitle}>Şu an kimse yok</Text>
-            <Text style={styles.emptyText}>Yakında yeni vibe'lar geliyor. Sonra tekrar dene.</Text>
+            <Text style={styles.emptyText}>Yakında yeni vibe&apos;lar geliyor. Sonra tekrar dene.</Text>
             <TouchableOpacity style={styles.reloadBtn} onPress={load} testID="discover-reload">
               <Text style={styles.reloadText}>Yenile</Text>
             </TouchableOpacity>
@@ -298,7 +288,7 @@ function SwipeCard({ card, back }: { card: Card; back?: boolean }) {
       {card.top_post ? (
         <View style={styles.topPostBox}>
           <Text style={styles.topPostLabel}>SON VIBE</Text>
-          <Text style={styles.topPostText} numberOfLines={4}>"{card.top_post.text}"</Text>
+          <Text style={styles.topPostText} numberOfLines={4}>&quot;{card.top_post.text}&quot;</Text>
         </View>
       ) : null}
       <View style={styles.cardBottom}>

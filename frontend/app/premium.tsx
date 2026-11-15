@@ -62,7 +62,7 @@ export default function PremiumScreen() {
         setMsg(res.message || "Ödeme isteğiniz alındı.");
       }
       await refresh();
-    } catch (e: any) {
+    } catch {
       // If card payment is not configured, automatically show IBAN option
       setIbanModal(true);
     } finally {

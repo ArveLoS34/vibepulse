@@ -8,10 +8,11 @@ const PROJECT_ID = "8b323a10-2595-4ef5-923f-vibepulse0001";
 
 export function useNotifications() {
   const { user } = useAuth();
+  const userId = user?.user_id;
 
   useEffect(() => {
     async function registerForPushNotifications() {
-      if (!user) return;
+      if (!userId) return;
 
       const isExpoGo =
         Constants.appOwnership === "expo" ||
@@ -27,7 +28,8 @@ export function useNotifications() {
         if (typeof Notifications.setNotificationHandler === "function") {
           Notifications.setNotificationHandler({
             handleNotification: async () => ({
-              shouldShowAlert: true,
+              shouldShowBanner: true,
+              shouldShowList: true,
               shouldPlaySound: true,
               shouldSetBadge: true,
             }),
@@ -65,11 +67,11 @@ export function useNotifications() {
             });
           }
         }
-      } catch (err) {
+      } catch {
         // Log push error silently if device lacks Play Services
       }
     }
 
     registerForPushNotifications();
-  }, [user?.user_id]);
+  }, [userId]);
 }

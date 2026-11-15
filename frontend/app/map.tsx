@@ -93,7 +93,7 @@ export default function VibeMapScreen() {
                   </View>
 
                   <Text style={styles.pinTitle} numberOfLines={2}>
-                    "{item.title}"
+                    &quot;{item.title}&quot;
                   </Text>
 
                   {item.user ? (

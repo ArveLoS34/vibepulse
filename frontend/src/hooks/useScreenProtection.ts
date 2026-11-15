@@ -10,7 +10,7 @@ export function useScreenProtection() {
         if (isMounted && typeof ScreenCapture.preventScreenCaptureAsync === "function") {
           await ScreenCapture.preventScreenCaptureAsync();
         }
-      } catch (err) {
+      } catch {
         // Silently handle environment limitations
       }
     }
@@ -25,7 +25,7 @@ export function useScreenProtection() {
           if (typeof ScreenCapture.allowScreenCaptureAsync === "function") {
             await ScreenCapture.allowScreenCaptureAsync();
           }
-        } catch (err) {}
+        } catch {}
       }
       disableProtection();
     };

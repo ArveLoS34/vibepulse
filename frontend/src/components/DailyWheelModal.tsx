@@ -192,7 +192,7 @@ export function DailyWheelModal({ visible, onClose, onPostFortune }: Props) {
             {currentOutcome ? (
               <View style={styles.outcomeCard}>
                 <Text style={styles.outcomeTitle}>✨ Günün Kehaneti Belirdi:</Text>
-                <Text style={styles.outcomeText}>"{currentOutcome}"</Text>
+                <Text style={styles.outcomeText}>&quot;{currentOutcome}&quot;</Text>
 
                 <TouchableOpacity
                   onPress={shareOutcomeToFeed}

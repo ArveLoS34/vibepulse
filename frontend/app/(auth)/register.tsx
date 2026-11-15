@@ -49,7 +49,7 @@ export default function Register() {
             <Ionicons name="chevron-back" size={24} color={theme.text} />
           </Pressable>
           <Text style={styles.h1}>Hesap Oluştur</Text>
-          <Text style={styles.sub}>Vibe'ını dünyaya göster.</Text>
+          <Text style={styles.sub}>Vibe&apos;ını dünyaya göster.</Text>
 
           <View style={styles.field}>
             <Text style={styles.label}>Ad</Text>
