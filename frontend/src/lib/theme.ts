@@ -39,7 +39,22 @@ export const font = {
   bold: "System",
 };
 
+export const violet = "#8B5CF6";
+
+// Brand gradient used by primary buttons, logo, highlights.
+export const gradients = {
+  brand: [theme.rose, violet] as const,
+  brandSoft: ["rgba(244,63,94,0.18)", "rgba(139,92,246,0.18)"] as const,
+};
+
 export const shadows = {
+  card: {
+    shadowColor: "#000",
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
   glow: {
     shadowColor: "#F43F5E",
     shadowOpacity: 0.35,

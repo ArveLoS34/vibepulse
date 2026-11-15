@@ -1,22 +1,21 @@
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/src/context/AuthContext";
-import { theme, radius, spacing } from "@/src/lib/theme";
+import { theme, spacing } from "@/src/lib/theme";
+import { Button } from "@/src/components/ui/Button";
+import { Input } from "@/src/components/ui/Input";
 
 export default function Register() {
   const router = useRouter();
@@ -51,59 +50,50 @@ export default function Register() {
           <Text style={styles.h1}>Hesap Oluştur</Text>
           <Text style={styles.sub}>Vibe&apos;ını dünyaya göster.</Text>
 
-          <View style={styles.field}>
-            <Text style={styles.label}>Ad</Text>
-            <TextInput
-              testID="register-name"
-              value={name}
-              onChangeText={setName}
-              placeholder="Adın"
-              placeholderTextColor={theme.textMuted}
-              style={styles.input}
-              autoCapitalize="words"
-            />
-          </View>
+          <Input
+            label="Ad"
+            icon="person-outline"
+            testID="register-name"
+            value={name}
+            onChangeText={setName}
+            placeholder="Adın"
+            placeholderTextColor={theme.textMuted}
+            autoCapitalize="words"
+          />
 
-          <View style={styles.field}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              testID="register-email"
-              value={email}
-              onChangeText={setEmail}
-              placeholder="ornek@vibepulse.app"
-              placeholderTextColor={theme.textMuted}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={styles.input}
-            />
-          </View>
+          <Input
+            label="Email"
+            icon="mail-outline"
+            testID="register-email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="ornek@vibepulse.app"
+            placeholderTextColor={theme.textMuted}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
 
-          <View style={styles.field}>
-            <Text style={styles.label}>Şifre (en az 6)</Text>
-            <TextInput
-              testID="register-password"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="••••••••"
-              placeholderTextColor={theme.textMuted}
-              secureTextEntry
-              style={styles.input}
-            />
-          </View>
+          <Input
+            label="Şifre (en az 6)"
+            icon="lock-closed-outline"
+            testID="register-password"
+            value={password}
+            onChangeText={setPassword}
+            placeholder="••••••••"
+            placeholderTextColor={theme.textMuted}
+            secureTextEntry
+          />
 
           {err ? <Text style={styles.err}>{err}</Text> : null}
 
-          <TouchableOpacity onPress={submit} disabled={busy} testID="register-submit" style={{ marginTop: spacing.lg }}>
-            <LinearGradient
-              colors={[theme.rose, "#8B5CF6"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.primaryBtn}
-            >
-              {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Kayıt Ol</Text>}
-            </LinearGradient>
-          </TouchableOpacity>
+          <Button
+            title="Kayıt Ol"
+            onPress={submit}
+            loading={busy}
+            testID="register-submit"
+            style={{ marginTop: spacing.lg }}
+          />
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Zaten hesabın var mı?</Text>
@@ -122,20 +112,7 @@ const styles = StyleSheet.create({
   back: { marginTop: spacing.sm, marginBottom: spacing.lg, width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: theme.card },
   h1: { color: theme.text, fontSize: 32, fontWeight: "900", letterSpacing: -0.5 },
   sub: { color: theme.textDim, marginTop: 6, marginBottom: spacing.xl, fontSize: 15 },
-  field: { marginBottom: spacing.md },
-  label: { color: theme.textDim, fontSize: 12, marginBottom: 6, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: "700" },
-  input: {
-    backgroundColor: theme.card,
-    color: theme.text,
-    padding: 16,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: theme.border,
-    fontSize: 15,
-  },
   err: { color: theme.danger, marginTop: spacing.sm },
-  primaryBtn: { paddingVertical: 16, alignItems: "center", borderRadius: radius.pill },
-  primaryText: { color: "#fff", fontSize: 16, fontWeight: "800" },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: spacing.xl },
   footerText: { color: theme.textDim },
   link: { color: theme.rose, fontWeight: "700" },

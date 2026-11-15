@@ -1,22 +1,21 @@
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/src/context/AuthContext";
-import { theme, radius, spacing } from "@/src/lib/theme";
+import { theme, spacing } from "@/src/lib/theme";
+import { Button } from "@/src/components/ui/Button";
+import { Input } from "@/src/components/ui/Input";
 
 export default function Login() {
   const router = useRouter();
@@ -53,33 +52,29 @@ export default function Login() {
           <Text style={styles.h1}>Tekrar hoşgeldin</Text>
           <Text style={styles.sub}>Vibe&apos;ına devam et.</Text>
 
-          <View style={styles.field}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              testID="login-email"
-              value={email}
-              onChangeText={setEmail}
-              placeholder="ornek@vibepulse.app"
-              placeholderTextColor={theme.textMuted}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={styles.input}
-            />
-          </View>
+          <Input
+            label="Email"
+            icon="mail-outline"
+            testID="login-email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="ornek@vibepulse.app"
+            placeholderTextColor={theme.textMuted}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
 
-          <View style={styles.field}>
-            <Text style={styles.label}>Şifre</Text>
-            <TextInput
-              testID="login-password"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="••••••••"
-              placeholderTextColor={theme.textMuted}
-              secureTextEntry
-              style={styles.input}
-            />
-          </View>
+          <Input
+            label="Şifre"
+            icon="lock-closed-outline"
+            testID="login-password"
+            value={password}
+            onChangeText={setPassword}
+            placeholder="••••••••"
+            placeholderTextColor={theme.textMuted}
+            secureTextEntry
+          />
 
           <TouchableOpacity
             onPress={() => router.push("/(auth)/forgot-password")}
@@ -91,16 +86,13 @@ export default function Login() {
 
           {err ? <Text style={styles.err}>{err}</Text> : null}
 
-          <TouchableOpacity onPress={submit} disabled={busy} testID="login-submit" style={{ marginTop: spacing.lg }}>
-            <LinearGradient
-              colors={[theme.rose, "#8B5CF6"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.primaryBtn}
-            >
-              {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Giriş Yap</Text>}
-            </LinearGradient>
-          </TouchableOpacity>
+          <Button
+            title="Giriş Yap"
+            onPress={submit}
+            loading={busy}
+            testID="login-submit"
+            style={{ marginTop: spacing.lg }}
+          />
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Hesabın yok mu?</Text>
@@ -119,21 +111,8 @@ const styles = StyleSheet.create({
   back: { marginTop: spacing.sm, marginBottom: spacing.lg, width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: theme.card },
   h1: { color: theme.text, fontSize: 32, fontWeight: "900", letterSpacing: -0.5 },
   sub: { color: theme.textDim, marginTop: 6, marginBottom: spacing.xl, fontSize: 15 },
-  field: { marginBottom: spacing.md },
-  label: { color: theme.textDim, fontSize: 12, marginBottom: 6, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: "700" },
-  input: {
-    backgroundColor: theme.card,
-    color: theme.text,
-    padding: 16,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: theme.border,
-    fontSize: 15,
-  },
   err: { color: theme.danger, marginTop: spacing.sm },
   forgotText: { color: theme.rose, fontSize: 13, fontWeight: "600" },
-  primaryBtn: { paddingVertical: 16, alignItems: "center", borderRadius: radius.pill },
-  primaryText: { color: "#fff", fontSize: 16, fontWeight: "800" },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: spacing.xl },
   footerText: { color: theme.textDim },
   link: { color: theme.rose, fontWeight: "700" },
