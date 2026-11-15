@@ -3,7 +3,7 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { View } from "react-native";
-import { theme } from "@/src/lib/theme";
+import { theme, shadows } from "@/src/lib/theme";
 import { api } from "@/src/lib/api";
 import { useAuth } from "@/src/context/AuthContext";
 
@@ -35,13 +35,20 @@ export default function TabsLayout() {
         tabBarActiveTintColor: theme.rose,
         tabBarInactiveTintColor: theme.textMuted,
         tabBarShowLabel: false,
+        tabBarItemStyle: { paddingVertical: 6 },
+        // Same layout footprint as before (content is never covered), with rounded top corners.
         tabBarStyle: {
-          backgroundColor: "rgba(10,10,11,0.95)",
-          borderTopColor: theme.border,
+          backgroundColor: theme.card,
           borderTopWidth: 1,
+          borderLeftWidth: 1,
+          borderRightWidth: 1,
+          borderColor: theme.borderStrong,
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
           height: 64 + insets.bottom,
           paddingBottom: insets.bottom,
           paddingTop: 8,
+          ...shadows.card,
         },
       }}
     >
@@ -101,17 +108,17 @@ export default function TabsLayout() {
 
 function TabIcon({ children, focused }: { children: React.ReactNode; focused: boolean }) {
   return (
-    <View style={{ alignItems: "center", justifyContent: "center" }}>
+    <View
+      style={{
+        width: 52,
+        height: 40,
+        borderRadius: 20,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: focused ? "rgba(244,63,94,0.16)" : "transparent",
+      }}
+    >
       {children}
-      <View
-        style={{
-          width: 4,
-          height: 4,
-          borderRadius: 2,
-          marginTop: 4,
-          backgroundColor: focused ? theme.rose : "transparent",
-        }}
-      />
     </View>
   );
 }

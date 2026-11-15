@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { theme, radius, spacing } from "@/src/lib/theme";
+import { theme, spacing, gradients } from "@/src/lib/theme";
+import { Button } from "@/src/components/ui/Button";
 import { useTranslation } from "@/src/i18n/LanguageContext";
 import { LanguageSelectorModal } from "@/src/components/LanguageSelectorModal";
 
@@ -20,7 +21,7 @@ export default function Welcome() {
         <View style={styles.orb2} />
         <View style={styles.header}>
           <View style={styles.topRow}>
-            <LinearGradient colors={["#F43F5E", "#8B5CF6"]} style={styles.logo} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+            <LinearGradient colors={gradients.brand} style={styles.logo} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
               <Text style={{ color: "#fff", fontSize: 36, fontWeight: "900", fontStyle: "italic", letterSpacing: -1 }}>V</Text>
             </LinearGradient>
             <TouchableOpacity onPress={() => setLangOpen(true)} style={styles.langBtn} testID="welcome-lang-btn">
@@ -37,33 +38,24 @@ export default function Welcome() {
         </View>
 
         <View style={styles.actions}>
-          <Pressable
+          <Button
+            title={t("welcome_join")}
             onPress={() => router.push("/(auth)/register")}
             testID="cta-signup"
-            style={{ borderRadius: radius.pill, overflow: "hidden" }}
-          >
-            <LinearGradient
-              colors={[theme.rose, "#8B5CF6"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.primaryBtn}
-            >
-              <Text style={styles.primaryText}>{t("welcome_join")}</Text>
-            </LinearGradient>
-          </Pressable>
-
-          <Pressable
+          />
+          <Button
+            title={t("welcome_google")}
+            icon="logo-google"
+            variant="secondary"
             onPress={() => router.push("/(auth)/login")}
             testID="cta-google-login"
-            style={styles.googleBtn}
-          >
-            <Ionicons name="logo-google" size={20} color="#fff" style={{ marginRight: 8 }} />
-            <Text style={styles.googleText}>{t("welcome_google")}</Text>
-          </Pressable>
-
-          <Pressable onPress={() => router.push("/(auth)/login")} testID="cta-login" style={styles.secondaryBtn}>
-            <Text style={styles.secondaryText}>{t("welcome_login")}</Text>
-          </Pressable>
+          />
+          <Button
+            title={t("welcome_login")}
+            variant="ghost"
+            onPress={() => router.push("/(auth)/login")}
+            testID="cta-login"
+          />
         </View>
       </View>
 
@@ -120,25 +112,4 @@ const styles = StyleSheet.create({
   h1: { color: theme.text, fontSize: 44, fontWeight: "900", letterSpacing: -1, lineHeight: 48 },
   p: { color: theme.textDim, fontSize: 16, marginTop: spacing.md, lineHeight: 24 },
   actions: { gap: spacing.md, marginBottom: spacing.xl },
-  primaryBtn: { paddingVertical: 16, alignItems: "center", borderRadius: radius.pill },
-  primaryText: { color: "#fff", fontSize: 16, fontWeight: "800" },
-  googleBtn: {
-    paddingVertical: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius.pill,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.18)",
-  },
-  googleText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-  secondaryBtn: {
-    paddingVertical: 16,
-    alignItems: "center",
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: theme.borderStrong,
-  },
-  secondaryText: { color: theme.text, fontSize: 16, fontWeight: "700" },
 });
