@@ -64,7 +64,14 @@ export function Button({
   ) : (
     <View style={styles.row}>
       {icon ? <Ionicons name={icon} size={20} color={textColor} style={{ marginRight: 8 }} /> : null}
-      <Text style={[styles.text, { color: textColor, fontSize: compact ? 14 : 16 }]}>{title}</Text>
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+        style={[styles.text, { color: textColor, fontSize: compact ? 14 : 16 }]}
+      >
+        {title}
+      </Text>
     </View>
   );
 
@@ -114,7 +121,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
   },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
   text: { fontWeight: "800", letterSpacing: 0.2 },

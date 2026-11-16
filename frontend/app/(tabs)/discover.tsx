@@ -5,9 +5,9 @@ import {
   Dimensions,
   Image,
   PanResponder,
+  Pressable,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -17,7 +17,8 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { api } from "@/src/lib/api";
 import { useAuth } from "@/src/context/AuthContext";
-import { theme, radius, spacing } from "@/src/lib/theme";
+import { theme, radius, spacing, gradients, shadows } from "@/src/lib/theme";
+import { Button } from "@/src/components/ui/Button";
 import { Avatar } from "@/src/components/Avatar";
 import type { VibeUser } from "@/src/context/AuthContext";
 
@@ -139,7 +140,7 @@ export default function DiscoverScreen() {
             <Text style={styles.title}>Keşfet</Text>
             <Text style={styles.subtitle}>Vibe&apos;ları oku · Ruh eşini seç</Text>
           </View>
-          <TouchableOpacity
+          <Pressable
             onPress={() => {
               const next = !squadsActive;
               setSquadsActive(next);
@@ -148,10 +149,11 @@ export default function DiscoverScreen() {
             style={[styles.squadBtn, squadsActive && styles.squadBtnActive]}
             testID="squads-btn"
           >
+            <Ionicons name="people" size={15} color={squadsActive ? "#fff" : "#A78BFA"} />
             <Text style={[styles.squadText, squadsActive && { color: "#fff" }]}>
-              {squadsActive ? "👯 Squads (Aktif)" : "👯 Squads"}
+              {squadsActive ? "Squads · Aktif" : "Squads"}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
 
@@ -160,16 +162,27 @@ export default function DiscoverScreen() {
           <ActivityIndicator color={theme.rose} />
         ) : cards.length === 0 ? (
           <View style={styles.empty}>
-            <Ionicons name="sparkles-outline" size={48} color={theme.textMuted} />
+            <LinearGradient colors={gradients.brandSoft} style={styles.emptyIcon}>
+              <Ionicons name="sparkles" size={38} color={theme.rose} />
+            </LinearGradient>
             <Text style={styles.emptyTitle}>Şu an kimse yok</Text>
             <Text style={styles.emptyText}>Yakında yeni vibe&apos;lar geliyor. Sonra tekrar dene.</Text>
-            <TouchableOpacity style={styles.reloadBtn} onPress={load} testID="discover-reload">
-              <Text style={styles.reloadText}>Yenile</Text>
-            </TouchableOpacity>
+            <Button
+              title="Yenile"
+              icon="refresh"
+              compact
+              onPress={load}
+              testID="discover-reload"
+              style={{ marginTop: spacing.lg, minWidth: 160 }}
+            />
           </View>
         ) : (
           <>
-            {cards[1] && <SwipeCard card={cards[1]} back />}
+            {cards[1] && (
+              <View style={styles.cardAbs} pointerEvents="none">
+                <SwipeCard card={cards[1]} back />
+              </View>
+            )}
             {top && (
               <Animated.View
                 {...responder.panHandlers}
@@ -193,41 +206,46 @@ export default function DiscoverScreen() {
 
       {top && !loading && (
         <View style={styles.controls}>
-          <TouchableOpacity
+          <ControlButton
             testID="swipe-rewind"
-            style={[styles.ctrl, styles.ctrlRewind, (!user?.is_premium && !user?.is_admin) && { opacity: 0.6 }]}
+            icon={(user?.is_premium || user?.is_admin) ? "refresh" : "lock-closed"}
+            color={theme.amber}
+            size={50}
+            iconSize={21}
+            dim={!user?.is_premium && !user?.is_admin}
             onPress={rewind}
-          >
-            <Ionicons name={(user?.is_premium || user?.is_admin) ? "refresh" : "lock-closed"} size={22} color="#F59E0B" />
-          </TouchableOpacity>
-          <TouchableOpacity
+          />
+          <ControlButton
             testID="swipe-pass"
-            style={[styles.ctrl, styles.ctrlPass]}
+            icon="close"
+            color={theme.danger}
+            size={64}
+            iconSize={32}
             onPress={() => swipe("pass", -W * 1.2)}
-          >
-            <Ionicons name="close" size={30} color={theme.danger} />
-          </TouchableOpacity>
-          <TouchableOpacity
+          />
+          <ControlButton
             testID="swipe-super"
-            style={[styles.ctrl, styles.ctrlSuper]}
+            icon="flash"
+            color={theme.cyan}
+            size={50}
+            iconSize={24}
             onPress={() => swipe("super", W * 1.2)}
-          >
-            <Ionicons name="flash" size={26} color={theme.cyan} />
-          </TouchableOpacity>
-          <TouchableOpacity
+          />
+          <ControlButton
             testID="swipe-like"
-            style={[styles.ctrl, styles.ctrlLike]}
+            icon="heart"
+            color={theme.rose}
+            size={64}
+            iconSize={32}
             onPress={() => swipe("like", W * 1.2)}
-          >
-            <Ionicons name="heart" size={30} color={theme.rose} />
-          </TouchableOpacity>
+          />
         </View>
       )}
 
       {matchInfo && (
         <View style={styles.matchOverlay} testID="match-modal">
           <LinearGradient
-            colors={["rgba(244,63,94,0.4)", "rgba(139,92,246,0.4)"]}
+            colors={gradients.brandSoft}
             style={StyleSheet.absoluteFill}
           />
           <View style={styles.matchInner}>
@@ -236,36 +254,75 @@ export default function DiscoverScreen() {
               <Avatar uri={matchInfo.user.photos?.[0]} name={matchInfo.user.name || ""} size={110} ring />
             </View>
             <Text style={styles.matchName}>{matchInfo.user.name} ile vibe tuttunuz</Text>
-            <View style={{ flexDirection: "row", gap: 12, marginTop: spacing.xl }}>
-              <TouchableOpacity
+            <View style={styles.matchActions}>
+              <Button
+                title="Kaydırmaya devam"
+                variant="secondary"
+                compact
                 testID="match-continue"
-                style={styles.matchGhostBtn}
                 onPress={() => setMatchInfo(null)}
-              >
-                <Text style={styles.matchGhostText}>Kaydırmaya devam</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+                style={{ flex: 1 }}
+              />
+              <Button
+                title="Sohbete Başla"
+                compact
                 testID="match-chat"
                 onPress={() => {
                   const id = matchInfo.matchId;
                   setMatchInfo(null);
                   router.push({ pathname: "/chat/[matchId]", params: { matchId: id } });
                 }}
-              >
-                <LinearGradient
-                  colors={[theme.rose, "#8B5CF6"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.matchBtn}
-                >
-                  <Text style={styles.matchBtnText}>Sohbete Başla</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+                style={{ flex: 1 }}
+              />
             </View>
           </View>
         </View>
       )}
     </SafeAreaView>
+  );
+}
+
+function ControlButton({
+  icon,
+  color,
+  size,
+  iconSize,
+  testID,
+  onPress,
+  dim,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  color: string;
+  size: number;
+  iconSize: number;
+  testID: string;
+  onPress: () => void;
+  dim?: boolean;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const to = (v: number) => Animated.spring(scale, { toValue: v, useNativeDriver: true, speed: 40, bounciness: 8 }).start();
+  return (
+    <Animated.View style={{ transform: [{ scale }], opacity: dim ? 0.55 : 1 }}>
+      <Pressable
+        testID={testID}
+        onPress={onPress}
+        onPressIn={() => to(0.88)}
+        onPressOut={() => to(1)}
+        style={[
+          styles.ctrl,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            borderColor: color + "99",
+            backgroundColor: color + "1F",
+            shadowColor: color,
+          },
+        ]}
+      >
+        <Ionicons name={icon} size={iconSize} color={color} />
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -336,8 +393,11 @@ function SwipeCard({ card, back }: { card: Card; back?: boolean }) {
 const styles = StyleSheet.create({
   header: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   squadBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: radius.pill,
     backgroundColor: "rgba(139,92,246,0.15)",
     borderWidth: 1,
@@ -347,11 +407,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#8B5CF6",
     borderColor: theme.rose,
   },
-  squadText: { color: "#8B5CF6", fontWeight: "700", fontSize: 12 },
+  squadText: { color: "#A78BFA", fontWeight: "700", fontSize: 12 },
   title: { color: theme.text, fontSize: 26, fontWeight: "900", letterSpacing: -0.5 },
   subtitle: { color: theme.textDim, marginTop: 4, fontSize: 13 },
   stage: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.lg },
-  cardAbs: { position: "absolute", width: "100%", height: "95%", alignItems: "center", justifyContent: "center" },
+  cardAbs: { position: "absolute", left: spacing.lg, right: spacing.lg, height: "95%", alignItems: "center", justifyContent: "center" },
   card: {
     width: "100%",
     height: "100%",
@@ -359,9 +419,10 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: theme.card,
     borderWidth: 1,
-    borderColor: theme.border,
+    borderColor: theme.borderStrong,
+    ...shadows.card,
   },
-  cardBack: { transform: [{ scale: 0.94 }], opacity: 0.6, position: "absolute" },
+  cardBack: { transform: [{ scale: 0.94 }], opacity: 0.6 },
   topPostBox: {
     position: "absolute",
     top: spacing.xl,
@@ -417,48 +478,50 @@ const styles = StyleSheet.create({
   interestText: { color: "#fff", fontSize: 12, fontWeight: "600" },
   badge: {
     position: "absolute",
-    top: 40,
-    paddingHorizontal: 14,
+    top: 44,
+    paddingHorizontal: 16,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 3,
-    transform: [{ rotate: "-15deg" }],
+    transform: [{ rotate: "-14deg" }],
   },
-  likeBadge: { right: 30, borderColor: theme.green },
-  nopeBadge: { left: 30, borderColor: theme.danger, transform: [{ rotate: "15deg" }] },
-  badgeText: { color: "#fff", fontWeight: "900", fontSize: 24 },
+  likeBadge: { right: 28, borderColor: theme.green, backgroundColor: "rgba(34,197,94,0.22)" },
+  nopeBadge: {
+    left: 28,
+    borderColor: theme.danger,
+    backgroundColor: "rgba(239,68,68,0.22)",
+    transform: [{ rotate: "14deg" }],
+  },
+  badgeText: { color: "#fff", fontWeight: "900", fontSize: 26, letterSpacing: 2 },
   controls: {
     flexDirection: "row",
     justifyContent: "center",
-    gap: 20,
-    paddingVertical: spacing.md,
-    paddingBottom: spacing.md,
+    alignItems: "center",
+    gap: 18,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
   },
   ctrl: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: theme.card,
-    borderWidth: 1,
-    borderColor: theme.border,
+    borderWidth: 1.5,
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  ctrlPass: { borderColor: theme.danger },
-  ctrlRewind: { borderColor: "#F59E0B", width: 52, height: 52, borderRadius: 26 },
-  ctrlSuper: { borderColor: theme.cyan, width: 52, height: 52, borderRadius: 26 },
-  ctrlLike: { borderColor: theme.rose },
   empty: { alignItems: "center", gap: 10 },
   emptyTitle: { color: theme.text, fontSize: 18, fontWeight: "700", marginTop: spacing.md },
   emptyText: { color: theme.textDim, fontSize: 14, textAlign: "center" },
-  reloadBtn: {
-    marginTop: spacing.lg,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: radius.pill,
-    backgroundColor: theme.rose,
+  emptyIcon: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(244,63,94,0.3)",
   },
-  reloadText: { color: "#fff", fontWeight: "700" },
   matchOverlay: {
     position: "absolute",
     top: 0,
@@ -473,19 +536,10 @@ const styles = StyleSheet.create({
   matchInner: { alignItems: "center" },
   matchTitle: {
     color: theme.rose,
-    fontSize: 34,
+    fontSize: 36,
     fontWeight: "900",
     letterSpacing: 1.2,
   },
   matchName: { color: theme.text, fontSize: 18, fontWeight: "700", marginTop: 4, textAlign: "center" },
-  matchBtn: { paddingVertical: 14, paddingHorizontal: 22, borderRadius: radius.pill },
-  matchBtnText: { color: "#fff", fontWeight: "800" },
-  matchGhostBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: 22,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: theme.borderStrong,
-  },
-  matchGhostText: { color: theme.text, fontWeight: "700" },
+  matchActions: { flexDirection: "row", gap: 12, marginTop: spacing.xl, width: "100%" },
 });
